@@ -18,8 +18,8 @@
 }
 
 .logo-circle {
-  width: 42px;
-  height: 42px;
+  width: 52px;
+  height: 52px;
   border-radius: var(--radius-full);
   display: flex;
   align-items: center;
@@ -36,7 +36,7 @@
 
 .logo-text {
   font-family: var(--font-heading);
-  font-size: 1.5rem;
+  font-size: 1.75rem;
   font-weight: 700;
   color: var(--primary);
   letter-spacing: -0.5px;

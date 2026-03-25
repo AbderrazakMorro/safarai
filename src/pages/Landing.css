@@ -33,8 +33,8 @@
 }
 
 .landing-logo {
-  width: 42px;
-  height: 42px;
+  width: 56px;
+  height: 56px;
   background: linear-gradient(135deg, var(--primary), var(--secondary));
   border-radius: var(--radius-full);
   display: flex;
@@ -45,14 +45,14 @@
 }
 
 .landing-logo.small {
-  width: 36px;
-  height: 36px;
+  width: 48px;
+  height: 48px;
   font-size: 1rem;
 }
 
 .landing-logo-text {
   font-family: var(--font-heading);
-  font-size: 1.5rem;
+  font-size: 1.75rem;
   font-weight: 700;
   color: var(--primary);
   letter-spacing: -0.5px;

@@ -27,8 +27,8 @@
 }
 
 .auth-logo-circle {
-  width: 50px;
-  height: 50px;
+  width: 64px;
+  height: 64px;
   background: linear-gradient(135deg, var(--primary), var(--secondary));
   border-radius: var(--radius-full);
   display: flex;
