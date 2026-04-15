@@ -119,3 +119,20 @@
   background: linear-gradient(135deg, var(--background), white);
   border: 1px solid rgba(0,0,0,0.05);
 }
+
+@media (max-width: 768px) {
+  .navbar {
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+  }
+  .navbar-search {
+    display: none;
+  }
+  .logo-text {
+    font-size: 1.5rem;
+  }
+  .logo-circle {
+    width: 40px;
+    height: 40px;
+  }
+}
