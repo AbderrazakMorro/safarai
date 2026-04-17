@@ -1,56 +1,195 @@
 /**
  * SafarAI Gemini Service — Waterfall Architecture
  * 
- * 3-Stage Pipeline:
+ * 4-Stage Pipeline:
+ *   Stage 0: detectLanguage()        — Gemini detects user language + translates to English
  *   Stage 1: analyzeIntent()         — LLM classifies intent + extracts entities (no tools)
  *   Stage 2: executeTools()          — Native JS fetches real data (no LLM)
- *   Stage 3: generateFinalResponse() — LLM generates the final formatted response (no tools)
+ *   Stage 3: generateFinalResponse() — LLM generates the final formatted response in user's language
  */
 
 const API_KEY = import.meta.env.VITE_GROQ_API_KEY;
+const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 const MODEL_NAME = 'llama-3.3-70b-versatile';
 const ENDPOINT = 'https://api.groq.com/openai/v1/chat/completions';
+const GEMINI_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+
+
+// ─── Translation Utility (via Groq — Gemini quota exhausted) ────────────────
+// Detects the user's language and translates to/from using Groq LLM.
+
+const callTranslation = async (prompt) => {
+  if (!API_KEY) {
+    console.warn('[Translation] Groq API key missing, skipping translation');
+    return null;
+  }
+  try {
+    const res = await fetch(ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${API_KEY}`
+      },
+      body: JSON.stringify({
+        model: MODEL_NAME,
+        messages: [
+          { role: 'system', content: 'You are a precise translation engine. Follow the user instructions exactly. Return ONLY what is asked, no explanations.' },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.1,
+        max_tokens: 1000
+      })
+    });
+    const data = await res.json();
+    return data?.choices?.[0]?.message?.content?.trim() || null;
+  } catch (e) {
+    console.error('[Translation] Groq translation call failed:', e);
+    return null;
+  }
+};
+
+/**
+ * Stage 0: Detect language and translate user input to English if needed.
+ * Returns { detectedLang, originalInput, englishInput }
+ */
+const detectAndTranslate = async (userInput) => {
+  console.log('[Waterfall] Stage 0: Detecting language...');
+
+  const prompt = `Analyze this text and respond ONLY with a JSON object, no markdown fences:
+{
+  "language": "the ISO language code (en, fr, ar, darija, es, etc.)",
+  "language_name": "the full name of the language (English, French, Darija, Arabic, etc.)",
+  "english_translation": "the English translation of the text, or the original text if already in English"
+}
+
+IMPORTANT for Darija (Moroccan Arabic):
+- If the text contains Arabizi (Latin-script Moroccan Arabic like 'kifach', 'wach', 'salam', 'labas', 'fin', 'chno', 'hani', 'zwin', 'bghit', etc.), classify it as "darija"
+- Also classify Arabic-script Moroccan dialect as "darija"
+
+Text: "${userInput}"`;
+
+  const result = await callTranslation(prompt);
+
+  if (result) {
+    try {
+      const cleaned = result.replace(/```json?\s*/g, '').replace(/```/g, '').trim();
+      const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        console.log('[Waterfall] Stage 0: Detected language:', parsed.language_name || parsed.language);
+        return {
+          detectedLang: parsed.language || 'en',
+          langName: parsed.language_name || 'English',
+          originalInput: userInput,
+          englishInput: parsed.english_translation || userInput
+        };
+      }
+    } catch (e) {
+      console.warn('[Waterfall] Stage 0 parse failed:', e.message);
+    }
+  }
+
+  // Fallback: assume English
+  return { detectedLang: 'en', langName: 'English', originalInput: userInput, englishInput: userInput };
+};
+
+/**
+ * Translate the final response text back to the user's language using Gemini.
+ * This is the GUARANTEE layer — even if Stage 3 ignored the language instruction,
+ * this step will always force-translate the output.
+ */
+const translateResponse = async (text, targetLang, targetLangName) => {
+  if (targetLang === 'en') return text; // No translation needed
+
+  console.log(`[Waterfall] Force-translating response to ${targetLangName}...`);
+
+  let langInstruction = `Translate the following text to ${targetLangName}.`;
+  
+  if (targetLang === 'darija') {
+    langInstruction = `Translate the following text to Darija (Moroccan Arabic). 
+You MUST write the translation in Arabizi (Latin script, like: "salam, kifach nta? labas 3lik?").
+Do NOT use Arabic script. Use numbers for Arabic sounds: 3=ع, 7=ح, 9=ق, 5=خ, 2=ء.
+Use natural everyday Moroccan dialect, not formal Arabic.`;
+  } else if (targetLang === 'fr') {
+    langInstruction = `Translate the following text to French. Use natural, conversational French.`;
+  } else if (targetLang === 'ar') {
+    langInstruction = `Translate the following text to Modern Standard Arabic (MSA). Use Arabic script.`;
+  }
+
+  const prompt = `${langInstruction}
+Keep all Markdown formatting (bold, bullets, emojis) intact.
+Do NOT add any explanation or preamble, just return the translated text directly.
+
+Text to translate:
+${text}`;
+
+  const translated = await callTranslation(prompt);
+  return translated || text; // Fallback to original if translation fails
+};
+
+/**
+ * Translate an array of suggestion strings to the user's language.
+ */
+const translateSuggestions = async (suggestions, targetLang, targetLangName) => {
+  if (targetLang === 'en' || !suggestions || suggestions.length === 0) return suggestions;
+  
+  const prompt = `Translate each of these suggestions to ${targetLangName}.
+${targetLang === 'darija' ? 'Use Arabizi (Latin script Moroccan Arabic with numbers: 3=ع, 7=ح, 9=ق).' : ''}
+Return ONLY a JSON array of translated strings, no explanation.
+
+${JSON.stringify(suggestions)}`;
+
+  const result = await callTranslation(prompt);
+  if (result) {
+    try {
+      const cleaned = result.replace(/```json?\s*/g, '').replace(/```/g, '').trim();
+      const parsed = JSON.parse(cleaned);
+      if (Array.isArray(parsed)) return parsed;
+    } catch(e) {}
+  }
+  return suggestions;
+};
 
 // ─── City Coordinates Lookup ────────────────────────────────────────────────
 // Dynamic lookup table for Moroccan cities. The LLM extracts the city name,
 // and we resolve coordinates natively — no hallucinated lat/lon.
 const CITY_COORDS = {
-  'ifrane':       { lat: 33.5333, lon: -5.1167 },
-  'fes':          { lat: 34.0331, lon: -5.0003 },
-  'fez':          { lat: 34.0331, lon: -5.0003 },
-  'marrakech':    { lat: 31.6295, lon: -7.9811 },
-  'marrakesh':    { lat: 31.6295, lon: -7.9811 },
-  'casablanca':   { lat: 33.5731, lon: -7.5898 },
-  'rabat':        { lat: 34.0209, lon: -6.8416 },
-  'tangier':      { lat: 35.7595, lon: -5.8340 },
-  'tanger':       { lat: 35.7595, lon: -5.8340 },
-  'chefchaouen':  { lat: 35.1688, lon: -5.2636 },
-  'chaouen':      { lat: 35.1688, lon: -5.2636 },
-  'essaouira':    { lat: 31.5085, lon: -9.7595 },
-  'agadir':       { lat: 30.4278, lon: -9.5981 },
-  'meknes':       { lat: 33.8935, lon: -5.5473 },
-  'ouarzazate':   { lat: 30.9189, lon: -6.8936 },
-  'merzouga':     { lat: 31.0801, lon: -4.0133 },
-  'tetouan':      { lat: 35.5785, lon: -5.3684 },
-  'volubilis':    { lat: 34.0724, lon: -5.5546 },
-  'moulay idriss':{ lat: 34.0565, lon: -5.5230 },
-  'asilah':       { lat: 35.4653, lon: -6.0345 },
-  'el jadida':    { lat: 33.2549, lon: -8.5007 },
-  'safi':         { lat: 32.2994, lon: -9.2372 },
-  'nador':        { lat: 35.1681, lon: -2.9287 },
-  'oujda':        { lat: 34.6814, lon: -1.9086 },
-  'kenitra':      { lat: 34.2610, lon: -6.5802 },
-  'beni mellal':  { lat: 32.3373, lon: -6.3498 },
-  'errachidia':   { lat: 31.9314, lon: -4.4288 },
-  'dakhla':       { lat: 23.6848, lon: -15.9580 },
-  'taroudant':    { lat: 30.4727, lon: -8.8748 },
-  'azrou':        { lat: 33.4342, lon: -5.2214 },
-  'midelt':       { lat: 32.6799, lon: -4.7345 },
-  'taza':         { lat: 34.2133, lon: -4.0100 },
-  'al hoceima':   { lat: 35.2517, lon: -3.9372 },
-  'tiznit':       { lat: 29.6974, lon: -9.7316 },
-  'zagora':       { lat: 30.3302, lon: -5.8381 },
-  'tinghir':      { lat: 31.5147, lon: -5.5327 },
+  'ifrane': { lat: 33.5333, lon: -5.1167 },
+  'fes': { lat: 34.0331, lon: -5.0003 },
+  'fez': { lat: 34.0331, lon: -5.0003 },
+  'marrakech': { lat: 31.6295, lon: -7.9811 },
+  'marrakesh': { lat: 31.6295, lon: -7.9811 },
+  'casablanca': { lat: 33.5731, lon: -7.5898 },
+  'rabat': { lat: 34.0209, lon: -6.8416 },
+  'tangier': { lat: 35.7595, lon: -5.8340 },
+  'tanger': { lat: 35.7595, lon: -5.8340 },
+  'chefchaouen': { lat: 35.1688, lon: -5.2636 },
+  'chaouen': { lat: 35.1688, lon: -5.2636 },
+  'essaouira': { lat: 31.5085, lon: -9.7595 },
+  'agadir': { lat: 30.4278, lon: -9.5981 },
+  'meknes': { lat: 33.8935, lon: -5.5473 },
+  'ouarzazate': { lat: 30.9189, lon: -6.8936 },
+  'merzouga': { lat: 31.0801, lon: -4.0133 },
+  'tetouan': { lat: 35.5785, lon: -5.3684 },
+  'volubilis': { lat: 34.0724, lon: -5.5546 },
+  'moulay idriss': { lat: 34.0565, lon: -5.5230 },
+  'asilah': { lat: 35.4653, lon: -6.0345 },
+  'el jadida': { lat: 33.2549, lon: -8.5007 },
+  'safi': { lat: 32.2994, lon: -9.2372 },
+  'nador': { lat: 35.1681, lon: -2.9287 },
+  'oujda': { lat: 34.6814, lon: -1.9086 },
+  'kenitra': { lat: 34.2610, lon: -6.5802 },
+  'beni mellal': { lat: 32.3373, lon: -6.3498 },
+  'errachidia': { lat: 31.9314, lon: -4.4288 },
+  'dakhla': { lat: 23.6848, lon: -15.9580 },
+  'taroudant': { lat: 30.4727, lon: -8.8748 },
+  'azrou': { lat: 33.4342, lon: -5.2214 },
+  'midelt': { lat: 32.6799, lon: -4.7345 },
+  'taza': { lat: 34.2133, lon: -4.0100 },
+  'al hoceima': { lat: 35.2517, lon: -3.9372 },
+  'tiznit': { lat: 29.6974, lon: -9.7316 },
+  'zagora': { lat: 30.3302, lon: -5.8381 },
+  'tinghir': { lat: 31.5147, lon: -5.5327 },
 };
 
 // Default fallback coordinates (Ifrane)
@@ -63,15 +202,15 @@ const DEFAULT_COORDS = { lat: 33.5333, lon: -5.1167 };
 const resolveCityCoords = (cityName) => {
   if (!cityName) return DEFAULT_COORDS;
   const normalized = cityName.toLowerCase().trim();
-  
+
   // Direct lookup
   if (CITY_COORDS[normalized]) return CITY_COORDS[normalized];
-  
+
   // Partial match (e.g., "fes el bali" → "fes")
   for (const [key, coords] of Object.entries(CITY_COORDS)) {
     if (normalized.includes(key) || key.includes(normalized)) return coords;
   }
-  
+
   return null; // Unknown city — Stage 2 will use LLM-extracted lat/lon if available
 };
 
@@ -162,7 +301,7 @@ export const callGemini = callGroq;
 
 export const parseResponse = (rawText) => {
   console.log('[Waterfall] parseResponse raw input:', rawText?.substring(0, 300));
-  
+
   try {
     // Strip markdown code fences if present (```json ... ``` or ``` ... ```)
     let cleaned = rawText;
@@ -170,7 +309,7 @@ export const parseResponse = (rawText) => {
     if (fenceMatch) {
       cleaned = fenceMatch[1].trim();
     }
-    
+
     // Attempt to extract JSON if there's any surrounding text
     const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
     const jsonString = jsonMatch ? jsonMatch[0] : cleaned;
@@ -197,19 +336,19 @@ export const parseResponse = (rawText) => {
     };
   } catch (error) {
     console.warn('[Waterfall] parseResponse JSON parse failed:', error.message);
-    
+
     // Attempt fallback regex to extract "text" field if it looks like JSON
     let textFallback = rawText;
     try {
       const textMatch = rawText?.match(/"text"\s*:\s*(?:"|")([\s\S]*?)(?:"|")\s*(?:,|})/);
       if (textMatch) {
-         textFallback = textMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
+        textFallback = textMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
       } else {
-         // Also handle unescaped JSON text block failures if possible
-         const blockMatch = rawText?.match(/"text"\s*:\s*"?([\s\S]*?)”?\n\s*}/);
-         if (blockMatch) {
-            textFallback = blockMatch[1].trim();
-         }
+        // Also handle unescaped JSON text block failures if possible
+        const blockMatch = rawText?.match(/"text"\s*:\s*"?([\s\S]*?)”?\n\s*}/);
+        if (blockMatch) {
+          textFallback = blockMatch[1].trim();
+        }
       }
     } catch (e) {
       // Ignore inner errors
@@ -240,6 +379,7 @@ const analyzeIntent = async (userInput) => {
       {
         role: 'system',
         content: `You are an intent classifier for SafarAI, a Moroccan travel assistant.
+IMPORTANT: The user's message has already been translated to English for you. Classify based on the English meaning.
 
 Given the user's message, extract the following as a JSON object:
 
@@ -276,7 +416,7 @@ RULES:
     const message = await callGroq(payload);
     const content = message.content || '';
     const jsonMatch = content.match(/\{[\s\S]*\}/);
-    
+
     if (jsonMatch) {
       const result = JSON.parse(jsonMatch[0]);
       console.log('[Waterfall] Stage 1 Result:', result);
@@ -311,25 +451,25 @@ const executeTools = async (intentResult) => {
 
   // Resolve coordinates: city lookup → LLM-extracted coords → default
   let coords = null;
-  
+
   if (intentResult.city) {
     coords = resolveCityCoords(intentResult.city);
   }
-  
+
   if (!coords && intentResult.lat && intentResult.lon) {
     coords = { lat: intentResult.lat, lon: intentResult.lon };
   }
-  
+
   if (!coords) {
     coords = DEFAULT_COORDS; // Fallback to Ifrane
     console.log('[Waterfall] Stage 2: No city resolved, using default (Ifrane)');
   }
 
   const kinds = intentResult.kinds || 'interesting_places,historic,cultural,natural';
-  
+
   console.log(`[Waterfall] Stage 2: Fetching OpenTripMap → lat:${coords.lat}, lon:${coords.lon}, kinds:${kinds}`);
   const toolData = await fetchOpenTripMapData(coords.lat, coords.lon, kinds);
-  
+
   return {
     source: 'opentripmap',
     city: intentResult.city || 'Ifrane',
@@ -343,8 +483,8 @@ const executeTools = async (intentResult) => {
 // Second LLM call with the full persona. Receives tool data as context.
 // NO tools attached — the model focuses purely on generating the JSON response.
 
-const generateFinalResponse = async (userInput, intentResult, toolData, context) => {
-  console.log('[Waterfall] Stage 3: Generating final response...');
+const generateFinalResponse = async (userInput, intentResult, toolData, context, langInfo, isAuthenticated = true) => {
+  console.log('[Waterfall] Stage 3: Generating final response... (auth:', isAuthenticated, ')');
 
   const systemPrompt = `# SafarAI — Your Moroccan Travel Concierge
 
@@ -355,7 +495,7 @@ const generateFinalResponse = async (userInput, intentResult, toolData, context)
 ## 2. Communication Guidelines
 - Authentic Voice: Always respond as a natural, local human expert. Do not use generic robotic placeholders.
 - Proactive Expert: If a user asks about a place, automatically mention a local secret (e.g., if they ask about Ifrane, mention the *Al Akhawayn campus* or *Stone Lion*).
-- Multilingualism: Support Darija (Arabizi), French, and English. If the user uses a mix, you should too.
+- Multilingualism: The user's detected language is **${langInfo?.langName || 'English'}**. You MUST write all your responses in **${langInfo?.langName || 'English'}**. If the language is Darija, write in Arabizi (Latin script Moroccan Arabic). If French, write in French. Always match the user's language.
 - No Format Requirements: Allow the user to speak naturally. Do not ask for specific parameters if you can infer them.
 
 ## 3. Detected Intent: ${intentResult.intent}
@@ -396,7 +536,17 @@ IMPORTANT RULES:
 - Leave "monuments" as [] if not a location query
 - Leave "itinerary" as [] if not a trip planning request
 - The "text" field is ALWAYS required — this is your main conversational response
-- Use realistic data. Do not hallucinate unknown information.`;
+- Use realistic data. Do not hallucinate unknown information.
+${!isAuthenticated ? `
+## IMPORTANT — GUEST USER (NOT LOGGED IN)
+This user is NOT signed up. You must:
+- Give only a SHORT teaser/overview (2-3 sentences max) about the topic
+- Do NOT give full itineraries, detailed lists, or complete recommendations
+- Do NOT fill the "itinerary" array — leave it empty []
+- Limit "monuments" to at most 1 item
+- At the END of your "text", ALWAYS add this line: "\n\n🔐 **Sign up for free** to unlock full itineraries, personalized recommendations, and exclusive local tips!"
+- Keep it enticing so they want to sign up
+` : ''}`;
 
   const payload = {
     model: MODEL_NAME,
@@ -424,7 +574,7 @@ IMPORTANT RULES:
 
 // ─── 7. Orchestrator (Main Export) — Waterfall Pipeline ─────────────────────
 
-export const getGeminiResponse = async (userInput) => {
+export const getGeminiResponse = async (userInput, { isAuthenticated = true } = {}) => {
   // ── Sanitize & Validate ──
   const sanitized = sanitizeInput(userInput);
   if (!validateInput(sanitized)) throw new Error('User input cannot be empty');
@@ -432,23 +582,38 @@ export const getGeminiResponse = async (userInput) => {
   const context = buildContext();
 
   try {
-    // ── Stage 1: Classify Intent ──
-    const intentResult = await analyzeIntent(sanitized);
+    // ── Stage 0: Detect Language & Translate ──
+    const langInfo = await detectAndTranslate(sanitized);
+    console.log(`[Waterfall] Language: ${langInfo.langName} (${langInfo.detectedLang})`);
+
+    // ── Stage 1: Classify Intent (using English input) ──
+    const intentResult = await analyzeIntent(langInfo.englishInput);
 
     // ── Stage 2: Execute Tools (native JS, no LLM) ──
     const toolData = await executeTools(intentResult);
 
     // ── Stage 3: Generate Final Response (LLM, no tools) ──
-    const rawResponse = await generateFinalResponse(sanitized, intentResult, toolData, context);
+    const rawResponse = await generateFinalResponse(langInfo.originalInput, intentResult, toolData, context, langInfo, isAuthenticated);
 
     // ── Parse & Return ──
     const parsed = parseResponse(rawResponse);
-    console.log('[Waterfall] Pipeline complete. Intent:', intentResult.intent, '→ Parsed intent:', parsed.intent);
+
+    // ── Post-process: ALWAYS translate to user's language ──
+    if (langInfo.detectedLang !== 'en') {
+      const [translatedText, translatedSuggestions] = await Promise.all([
+        translateResponse(parsed.text, langInfo.detectedLang, langInfo.langName),
+        translateSuggestions(parsed.suggestions, langInfo.detectedLang, langInfo.langName)
+      ]);
+      parsed.text = translatedText;
+      parsed.suggestions = translatedSuggestions;
+    }
+
+    console.log(`[Waterfall] Pipeline complete. Lang: ${langInfo.langName}, Intent: ${intentResult.intent} → Parsed: ${parsed.intent}`);
     return parsed;
 
   } catch (error) {
     console.error('[Waterfall] Pipeline error:', error);
-    
+
     // Graceful fallback — try a direct single-shot call without the waterfall
     console.log('[Waterfall] Attempting direct fallback...');
     try {
