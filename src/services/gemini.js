@@ -636,3 +636,128 @@ export const getGeminiResponse = async (userInput, { isAuthenticated = true } = 
     }
   }
 };
+
+/**
+ * Roadtrip Planner Engine
+ * Generates an itinerary including days, stops, and activities between origin and destination.
+ */
+export const generateRoadtripItinerary = async (origin, destination, days = 3) => {
+  if (!API_KEY) {
+    console.error('[Roadtrip] Groq API key missing.');
+    return null;
+  }
+
+  const prompt = `You are a Moroccan travel concierge. The human wants to take a roadtrip from ${origin} to ${destination} over ${days} days.
+Please generate a realistic, sequential itinerary including logical stops between these two locations.
+Return ONLY a strictly valid JSON array of objects, with NO markdown code blocks, NO markdown syntax and NO extra text.
+Format example:
+[
+  {
+    "day": "Day 1",
+    "dateInfo": "Start the journey",
+    "stopName": "City or Region Name",
+    "lat": 31.6295,
+    "lng": -7.9811,
+    "description": "Why stop here? What is the vibe?",
+    "activities": ["Activity 1", "Activity 2"]
+  }
+]
+Constraints:
+- Focus on actual Moroccan cities, villages, or scenic spots along the route from ${origin} to ${destination}.
+- VERY IMPORTANT: estimate the realistic latitude (lat) and longitude (lng) for each stop so we can plot it on a map.
+- Keep descriptions brief and enticing.
+- The first stop should be the departure or nearby, the last should be near the destination or the destination itself.`;
+
+  try {
+    const res = await fetch(ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${API_KEY}`
+      },
+      body: JSON.stringify({
+        model: MODEL_NAME,
+        messages: [
+          { role: 'system', content: 'You are a Moroccan travel itinerary API. Output perfectly valid JSON arrays only.' },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.3,
+        max_completion_tokens: 1500
+      })
+    });
+    const data = await res.json();
+    const content = data?.choices?.[0]?.message?.content?.trim();
+    if (!content) return null;
+
+    const cleaned = content.replace(/```json?\s*/g, '').replace(/```/g, '').trim();
+    return JSON.parse(cleaned);
+  } catch (e) {
+    console.error('[Roadtrip] Itinerary generation failed:', e);
+    return null;
+  }
+};
+
+/**
+ * City Explorer Engine
+ * Generates points of interest within a single city, with coordinates and categories.
+ */
+export const generateCityExplorer = async (cityName) => {
+  if (!API_KEY) {
+    console.error('[CityExplorer] Groq API key missing.');
+    return null;
+  }
+
+  const prompt = `You are a Moroccan local expert with encyclopedic knowledge. The human wants to FULLY explore ${cityName}, Morocco.
+Generate 20-25 places to visit and things to do WITHIN the city. Include EVERYTHING worth seeing — from the most iconic, world-famous landmarks down to lesser-known local favorites and hidden gems.
+Return ONLY a strictly valid JSON array of objects, with NO markdown code blocks, NO markdown syntax and NO extra text.
+Order them from MOST POPULAR / MOST VISITED to LEAST KNOWN / HIDDEN GEM.
+Format:
+[
+  {
+    "name": "Place Name",
+    "lat": 31.6295,
+    "lng": -7.9811,
+    "category": "one of: landmark, food, market, culture, nature, nightlife, shopping, religion",
+    "popularity": 10,
+    "description": "A brief, exciting 1-2 sentence description of why to visit.",
+    "tips": "One practical tip for visitors."
+  }
+]
+Constraints:
+- "popularity" is a score from 1 (hidden gem, very few tourists know it) to 10 (world-famous, millions of visitors per year). Be realistic and varied.
+- Focus on REAL, actual places and attractions within ${cityName}.
+- VERY IMPORTANT: provide realistic, accurate latitude and longitude so we can plot them on a map.
+- Cover a WIDE mix of categories: landmarks, restaurants, souks/markets, cultural sites, mosques, nature spots, viewpoints, gardens, museums, nightlife, cafés, etc.
+- Keep descriptions vivid and enticing.
+- Include at least 3-4 hidden gems (popularity 1-3) that only locals know about.`;
+
+  try {
+    const res = await fetch(ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${API_KEY}`
+      },
+      body: JSON.stringify({
+        model: MODEL_NAME,
+        messages: [
+          { role: 'system', content: 'You are a Moroccan city exploration API. Output perfectly valid JSON arrays only. Generate comprehensive, large lists.' },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.4,
+        max_completion_tokens: 4000
+      })
+    });
+    const data = await res.json();
+    const content = data?.choices?.[0]?.message?.content?.trim();
+    if (!content) return null;
+
+    const cleaned = content.replace(/```json?\s*/g, '').replace(/```/g, '').trim();
+    const parsed = JSON.parse(cleaned);
+    // Sort by popularity descending (most seen first)
+    return parsed.sort((a, b) => (b.popularity || 5) - (a.popularity || 5));
+  } catch (e) {
+    console.error('[CityExplorer] Generation failed:', e);
+    return null;
+  }
+};

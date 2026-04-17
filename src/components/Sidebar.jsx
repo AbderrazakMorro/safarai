@@ -47,6 +47,15 @@ const Sidebar = () => {
                 </NavLink>
                 
                 <NavLink 
+                    to="/trips" 
+                    className={({ isActive }) => 
+                        `flex items-center gap-3 px-4 py-3 rounded-xl transition-transform hover:translate-x-1 ${isActive ? "bg-white dark:bg-stone-800 text-teal-900 dark:text-teal-100 shadow-sm font-semibold" : "text-stone-500 dark:text-stone-400 hover:bg-stone-200/50 dark:hover:bg-stone-800/50"}`
+                    }>
+                    <span className="material-symbols-outlined text-xl">route</span>
+                    <span className="font-headline text-sm">Roadtrip Planner</span>
+                </NavLink>
+
+                <NavLink 
                     to="/settings" 
                     className={({ isActive }) => 
                         `flex items-center gap-3 px-4 py-3 rounded-xl transition-transform hover:translate-x-1 ${isActive ? "bg-white dark:bg-stone-800 text-teal-900 dark:text-teal-100 shadow-sm font-semibold" : "text-stone-500 dark:text-stone-400 hover:bg-stone-200/50 dark:hover:bg-stone-800/50"}`

@@ -32,21 +32,18 @@ export default function Activities() {
         const data = await res.json();
 
         if (data && data.response && data.response.groups && data.response.groups.length > 0) {
-            const fetchPexelsImage = async (name) => {
+            const fetchWikipediaImage = async (name) => {
                 try {
-                    const apiKey = import.meta.env.VITE_PEXELS_API_KEY;
-                    if (!apiKey) return null;
-                    const search = encodeURIComponent(`${name} morocco`);
-                    const u = `https://api.pexels.com/v1/search?query=${search}&per_page=1&orientation=landscape`;
-                    const r = await fetch(u, {
-                        headers: { Authorization: apiKey }
-                    });
+                    const u = `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(name.split(' ')[0])}&prop=pageimages&format=json&pithumbsize=800&origin=*`;
+                    const r = await fetch(u);
                     const j = await r.json();
-                    if (j.photos && j.photos.length > 0) {
-                        return j.photos[0].src.large2x || j.photos[0].src.large;
+                    const pages = j.query.pages;
+                    const pageId = Object.keys(pages)[0];
+                    if (pageId !== "-1" && pages[pageId].thumbnail) {
+                        return pages[pageId].thumbnail.source;
                     }
                 } catch(e) {
-                    console.error("Pexels fetch failed:", e);
+                    console.error("Wikipedia fetch failed:", e);
                 }
                 return null;
             };
@@ -72,19 +69,13 @@ export default function Activities() {
                 } catch(e) {}
 
                 if (!imageUrl) {
-                    imageUrl = await fetchPexelsImage(venue.name);
+                    imageUrl = await fetchWikipediaImage(venue.name);
                 }
 
                 if (!imageUrl) {
-                    const fallbacks = [
-                        "https://images.unsplash.com/photo-1544390558-75276c125d02?auto=format&fit=crop&q=80&w=800",
-                        "https://images.unsplash.com/photo-1552086202-ce44bd7426f8?auto=format&fit=crop&q=80&w=800",
-                        "https://images.unsplash.com/photo-1582293041079-7814c2f12063?auto=format&fit=crop&q=80&w=800",
-                        "https://images.unsplash.com/photo-1530053969600-caedc5a19eca?auto=format&fit=crop&q=80&w=800",
-                        "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&q=80&w=800",
-                        "https://images.unsplash.com/photo-1539020140153-e479b8c22e70?auto=format&fit=crop&q=80&w=800"
-                    ];
-                    imageUrl = fallbacks[i % fallbacks.length];
+                    const seed = (venue.id ? venue.id.charCodeAt(0) + venue.id.charCodeAt(venue.id.length-1) : i) % 10000;
+                    const cleanCat = categoryName.split(' ')[0].replace(/[^a-zA-Z0-9]/g, '');
+                    imageUrl = `https://loremflickr.com/800/600/morocco,${cleanCat}?lock=${seed}`;
                 }
 
                 return {

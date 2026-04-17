@@ -3,48 +3,40 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Search, Filter, Star, MapPin } from 'lucide-react';
 import Card from '../components/Card';
 import './Destinations.css';
-import MOCK_CITIES from '../data/cities.json';
 
 const DestinationCard = ({ dest }) => {
   const [imageUrl, setImageUrl] = useState(dest.fallbackImage);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    // Attempt to fetch Pexels imagery to provide maximum diversity
+    useEffect(() => {
     let isMounted = true;
-    const fetchPexelsImage = async () => {
+    const fetchWikipediaImage = async () => {
       try {
-        const apiKey = import.meta.env.VITE_PEXELS_API_KEY;
-        if (!apiKey) {
-            console.warn("No Pexels API Key found");
-            return;
-        }
-        const search = encodeURIComponent(`${dest.cityName} morocco city skyline`);
-        const u = `https://api.pexels.com/v1/search?query=${search}&per_page=1&orientation=landscape`;
-        const r = await fetch(u, {
-            headers: {
-                Authorization: apiKey
-            }
-        });
+        const search = encodeURIComponent(dest.cityName);
+        const u = `https://en.wikipedia.org/w/api.php?action=query&titles=${search}&prop=pageimages&format=json&pithumbsize=800&origin=*`;
+        const r = await fetch(u);
         const j = await r.json();
-        if (j.photos && j.photos.length > 0 && isMounted) {
-            setImageUrl(j.photos[0].src.large2x || j.photos[0].src.large);
+        const pages = j.query.pages;
+        const pageId = Object.keys(pages)[0];
+        if (pageId !== "-1" && pages[pageId].thumbnail && isMounted) {
+            setImageUrl(pages[pageId].thumbnail.source);
+        } else if (isMounted) {
+            setImageUrl(`https://loremflickr.com/800/600/morocco,${search}?lock=${dest.id}`);
         }
       } catch(e) {
-          console.error("Pexels fetch failed:", e);
+          if (isMounted) setImageUrl(`https://loremflickr.com/800/600/morocco,${encodeURIComponent(dest.cityName)}?lock=${dest.id}`);
       }
     };
 
-    // Slight random delay to prevent API bottleneck
     const timeoutId = setTimeout(() => {
-      fetchPexelsImage();
+      fetchWikipediaImage();
     }, Math.random() * 800);
 
     return () => {
       isMounted = false;
       clearTimeout(timeoutId);
     };
-  }, [dest.cityName]);
+  }, [dest.cityName, dest.id]);
 
   return (
     <Card hoverable className="destination-card" onClick={() => navigate(`/activities?city=${encodeURIComponent(dest.cityName)}`)}>
@@ -77,46 +69,50 @@ export default function Destinations() {
   const [activeFilter, setActiveFilter] = useState('All');
   const [searchQuery, setSearchQuery] = useState(initQuery);
   const [destinations, setDestinations] = useState([]);
-  const [visibleCount, setVisibleCount] = useState(12);
+  const [visibleCount, setVisibleCount] = useState(100); // Display all cities by default
 
-  useEffect(() => {
-    // Cities loading synchronously from local JSON avoids API downtime
-    const photos = [
-      "https://images.unsplash.com/photo-1597212618440-806262de4f6b",
-      "https://images.unsplash.com/photo-1539020140153-e479b8c22e70",
-      "https://images.unsplash.com/photo-1544390558-75276c125d02",
-      "https://images.unsplash.com/photo-1552086202-ce44bd7426f8",
-      "https://images.unsplash.com/photo-1582293041079-7814c2f12063",
-      "https://images.unsplash.com/photo-1530053969600-caedc5a19eca",
-      "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4",
-      "https://images.unsplash.com/photo-1489745028170-e4d6eb230a10",
-      "https://images.unsplash.com/photo-1548661710-7f540c9f56d6",
-      "https://images.unsplash.com/photo-1533008988647-73d09a5ec9cf"
-    ];
-
-    const mapped = MOCK_CITIES.map((city, index) => {
-      let climate = 'Sunny';
-      if (['Ifrane', 'Azrou', 'Midelt', 'Azilal', 'Khenifra'].includes(city)) climate = 'Cold';
-      else if (['Agadir', 'Dakhla', 'Essaouira', 'Taghazout'].includes(city)) climate = 'Tropical';
-      else if (['Tangier', 'Tetouan', 'Rabat', 'Casablanca', 'Kenitra'].includes(city)) climate = 'Mild';
-      else climate = 'Sunny';
+    useEffect(() => {
+        let isMounted = true;
+        const fetchCities = async () => {
+            try {
+                const res = await fetch("https://countriesnow.space/api/v0.1/countries/cities", {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ country: "Morocco" })
+                });
+                const data = await res.json();
+                
+                if (data && !data.error && data.data && isMounted) {
+                    const mapped = data.data.map((city, index) => {
+                        let climate = 'Sunny';
+                        if (['Ifrane', 'Azrou', 'Midelt', 'Azilal', 'Khenifra'].includes(city)) climate = 'Cold';
+                        else if (['Agadir', 'Dakhla', 'Essaouira', 'Taghazout'].includes(city)) climate = 'Tropical';
+                        else if (['Tangier', 'Tetouan', 'Rabat', 'Casablanca', 'Kenitra'].includes(city)) climate = 'Mild';
+                        else climate = 'Sunny';
 
       const price = index % 5 === 0 ? "$$$" : index % 2 === 0 ? "$$" : "$";
 
-      return {
-        id: index,
-        cityName: city,
-        name: city + ", Morocco",
-        fallbackImage: photos[index % photos.length] + "?auto=format&fit=crop&q=80&w=800",
-        rating: (Math.random() * 0.8 + 4.2).toFixed(1),
-        price,
-        climate,
-        aiRecommended: index < 6
-      };
-    });
-
-    setDestinations(mapped);
-  }, []);
+                        return {
+                            id: index,
+                            cityName: city,
+                            name: city + ", Morocco",
+                            fallbackImage: `https://loremflickr.com/800/600/morocco,${encodeURIComponent(city.split(' ')[0])}?lock=${index}`,
+                            rating: (Math.random() * 0.8 + 4.2).toFixed(1),
+                            price,
+                            climate,
+                            aiRecommended: index < 6
+                        };
+                    });
+                    setDestinations(mapped);
+                }
+            } catch (error) {
+                console.error("Cities fetch failed", error);
+            }
+        };
+        fetchCities();
+        
+        return () => { isMounted = false; };
+    }, []);
 
   const filters = ['All', 'Sunny', 'Cold', 'Tropical', 'Mild'];
 
