@@ -7,32 +7,37 @@ const BottomNav = () => {
     // Helper function for active state logic
     const getLinkClasses = (path) => {
         const isActive = location.pathname === path;
-        return isActive 
-            ? "flex flex-col items-center justify-center bg-primary/10 text-primary rounded-xl p-2 w-16 transition-all duration-300 ease-out" 
-            : "flex flex-col items-center justify-center text-stone-400 hover:text-stone-600 p-2 transition-all duration-300 ease-out";
+        return `flex flex-col items-center justify-center p-2 pt-3 w-[4.5rem] relative transition-all duration-300 ease-out ${
+            isActive ? "text-primary" : "text-stone-400 hover:text-stone-600"
+        }`;
     };
 
     return (
-        <nav className="md:hidden fixed bottom-0 w-full z-50 bg-stone-50/95 dark:bg-stone-900/95 backdrop-blur-xl shadow-[0_-12px_32px_rgba(25,28,28,0.06)] flex justify-around items-center px-4 pb-4 pt-3 rounded-t-[2rem]">
+        <nav className="md:hidden fixed bottom-0 w-full z-50 bg-surface/80 dark:bg-stone-900/80 backdrop-blur-xl border-t border-white/50 dark:border-white/5 shadow-[0_-10px_40px_rgba(0,104,94,0.08)] flex justify-between items-center px-4 pb-6 pt-1">
             <Link to="/dashboard" className={getLinkClasses('/dashboard')}>
-                <span className="material-symbols-outlined" style={{fontVariationSettings: location.pathname === '/dashboard' ? "'FILL' 1" : "'FILL' 0"}}>dashboard</span>
-                <span className="text-[10px] font-headline font-semibold tracking-wide mt-1">Home</span>
+                <span className="material-symbols-outlined dropdown" style={{fontVariationSettings: location.pathname === '/dashboard' ? "'FILL' 1" : "'FILL' 0", fontSize: '24px'}}>dashboard</span>
+                <span className={`text-[10px] font-headline tracking-wide mt-1 ${location.pathname === '/dashboard' ? 'font-bold' : 'font-medium'}`}>Home</span>
             </Link>
             
-            <Link to="/destinations" className={getLinkClasses('/destinations')}>
-                <span className="material-symbols-outlined" style={{fontVariationSettings: location.pathname === '/destinations' || location.pathname === '/activities' ? "'FILL' 1" : "'FILL' 0"}}>explore</span>
-                <span className="text-[10px] font-headline font-semibold tracking-wide mt-1">Explore</span>
+            <Link to="/trips" className={getLinkClasses('/trips')}>
+                <span className="material-symbols-outlined" style={{fontVariationSettings: location.pathname === '/trips' ? "'FILL' 1" : "'FILL' 0", fontSize: '24px'}}>route</span>
+                <span className={`text-[10px] font-headline tracking-wide mt-1 ${location.pathname === '/trips' ? 'font-bold' : 'font-medium'}`}>Plan</span>
+            </Link>
+
+            <Link to="/activities" className={getLinkClasses('/activities')}>
+                <span className="material-symbols-outlined" style={{fontVariationSettings: location.pathname === '/activities' ? "'FILL' 1" : "'FILL' 0", fontSize: '24px'}}>auto_awesome</span>
+                <span className={`text-[10px] font-headline tracking-wide mt-1 ${location.pathname === '/activities' ? 'font-bold' : 'font-medium'}`}>AI</span>
             </Link>
             
-            <Link to="/backpack" className={getLinkClasses('/backpack')}>
-                 <span className="material-symbols-outlined" style={{fontVariationSettings: location.pathname === '/backpack' ? "'FILL' 1" : "'FILL' 0"}}>map</span>
-                <span className="text-[10px] font-headline font-semibold tracking-wide mt-1">Trips</span>
+            <Link to="/favorites" className={getLinkClasses('/favorites')}>
+                 <span className="material-symbols-outlined" style={{fontVariationSettings: location.pathname === '/favorites' ? "'FILL' 1" : "'FILL' 0", fontSize: '24px'}}>bookmark</span>
+                <span className={`text-[10px] font-headline tracking-wide mt-1 ${location.pathname === '/favorites' ? 'font-bold' : 'font-medium'}`}>Saved</span>
             </Link>
             
-            <button className="flex flex-col items-center justify-center text-stone-400 hover:text-stone-600 p-2 transition-all duration-300 ease-out">
-                <span className="material-symbols-outlined">settings</span>
-                <span className="text-[10px] font-headline font-semibold tracking-wide mt-1">Settings</span>
-            </button>
+            <Link to="/settings" className={getLinkClasses('/settings')}>
+                <span className="material-symbols-outlined" style={{fontVariationSettings: location.pathname === '/settings' ? "'FILL' 1" : "'FILL' 0", fontSize: '24px'}}>settings</span>
+                <span className={`text-[10px] font-headline tracking-wide mt-1 ${location.pathname === '/settings' ? 'font-bold' : 'font-medium'}`}>Settings</span>
+            </Link>
         </nav>
     );
 };

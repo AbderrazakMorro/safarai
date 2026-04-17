@@ -365,7 +365,7 @@ const FloatingChat = () => {
             </div>
 
             {/* Floating Trigger */}
-            <div className={`fixed bottom-6 right-4 md:bottom-8 md:right-8 z-[61] transition-opacity duration-300 flex items-center gap-4
+            <div className={`fixed bottom-[5.5rem] right-4 md:bottom-8 md:right-8 z-[61] transition-opacity duration-300 flex items-center gap-4
                 ${isOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
                 
                 <div 

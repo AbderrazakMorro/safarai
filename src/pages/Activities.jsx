@@ -103,30 +103,45 @@ export default function Activities() {
   }, [activeCity]);
 
   return (
-    <div className="activities-container page-content glass">
-      <div className="activities-header">
-        <h2>{activeCity ? `Activities in ${activeCity}` : 'Local Activities'}</h2>
-        <div className="activities-controls">
-          <div className="search-box">
-            <Search size={18} className="search-icon" />
+    <div className="activities-container page-content glass min-h-screen pb-32 md:pb-8">
+      {/* Header & Controls */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-8 animate-fade-in-up pt-4 md:pt-0">
+        <div className="max-w-xl">
+          <h1 className="text-4xl md:text-5xl font-extrabold font-headline text-on-surface tracking-tighter mb-2 leading-tight">
+            {activeCity ? `Activities in ${activeCity}` : 'Local Activities'}
+          </h1>
+          <p className="text-on-surface-variant text-base md:text-lg font-medium leading-relaxed">
+            Discover historic sites, cultural landmarks, and hidden gems.
+          </p>
+        </div>
+        
+        <div className="flex flex-col sm:flex-row w-full md:w-auto gap-4">
+          <div className="relative w-full md:w-72">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-400" size={18} />
             <input 
               type="text" 
               placeholder="Search activities..." 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-12 pr-4 py-3.5 rounded-xl bg-surface-container-low border border-outline-variant/30 focus:ring-2 focus:ring-primary/20 outline-none transition-all text-on-surface text-base"
             />
           </div>
-          <button className="filter-btn glass">
+          <button className="flex items-center justify-center gap-2 px-6 py-3.5 bg-surface-container-lowest border border-outline-variant/30 rounded-xl font-semibold text-on-surface-variant hover:text-on-surface hover:border-primary/30 transition-all shadow-sm">
             <Filter size={18} /> Filters
           </button>
         </div>
       </div>
 
-      <div className="filter-pills">
+      {/* Filter Pills */}
+      <div className="filter-pills flex gap-3 overflow-x-auto pb-2 mb-6 animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
         {filters.map(f => (
           <button 
             key={f} 
-            className={`pill ${activeFilter === f ? 'active' : ''}`}
+            className={`whitespace-nowrap px-6 py-2.5 rounded-full font-semibold text-sm transition-all duration-300 border ${
+               activeFilter === f 
+               ? 'bg-primary text-white border-primary shadow-md shadow-primary/20 scale-[1.02]' 
+               : 'bg-surface-container-lowest text-on-surface-variant border-outline-variant/30 hover:border-primary/30 hover:bg-surface-container-low'
+            }`}
             onClick={() => setActiveFilter(f)}
           >
             {f}
@@ -134,9 +149,13 @@ export default function Activities() {
         ))}
       </div>
 
-      <div className="activities-grid">
+      {/* Activities Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         {loading ? (
-          <div className="text-center py-12 text-white w-full" style={{ gridColumn: '1 / -1' }}>Fetching real Morocco activities...</div>
+          <div className="col-span-full text-center py-20 bg-surface-container-lowest/50 rounded-[2rem] border-2 border-dashed border-outline-variant/30 flex flex-col items-center justify-center">
+             <div className="w-12 h-12 rounded-full border-4 border-primary/20 border-t-primary animate-spin mb-4"></div>
+             <p className="text-on-surface-variant font-medium">Discovering amazing activities...</p>
+          </div>
         ) : activities.length > 0 ? (
           activities.filter(a => {
             const matchesCategory = activeFilter === 'All' || a.type === activeFilter;
@@ -144,14 +163,17 @@ export default function Activities() {
                                   a.city.toLowerCase().includes(searchQuery.toLowerCase());
             return matchesCategory && matchesSearch;
           }).map(act => (
-            <Card key={act.id} hoverable className="activity-card">
-              <div className="act-image-wrapper">
-                <img src={act.image} alt={act.name} className="act-image" loading="lazy" />
+            <Card key={act.id} hoverable className="p-0 overflow-hidden flex flex-col group relative bg-surface-container-lowest border-0 shadow-[0_12px_32px_rgba(25,28,28,0.06)] rounded-[2rem]">
+              <div className="relative h-48 w-full overflow-hidden shrink-0">
+                <img src={act.image} alt={act.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" loading="lazy" />
+                <div className="absolute inset-0 bg-gradient-to-t from-stone-900/80 via-stone-900/10 to-transparent"></div>
+                
                 {act.aiRecommended && (
-                  <div className="ai-badge">
+                  <div className="absolute top-4 left-4 bg-white/90 backdrop-blur-md text-amber-600 px-3 py-1.5 rounded-full text-[10px] font-extrabold uppercase tracking-widest flex items-center gap-1 shadow-sm">
                     <Star size={12} fill="currentColor" /> AI Top Pick
                   </div>
                 )}
+                
                 <button 
                   onClick={(e) => {
                     e.stopPropagation();
@@ -159,26 +181,38 @@ export default function Activities() {
                       ? removePlace(act.name) 
                       : savePlace({ id: act.name, name: act.name, category: act.type, city: act.city, type: 'poi', description: `Recommended duration: ${act.duration}` });
                   }}
-                  className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white border border-white/20 hover:scale-110 hover:bg-black/60 transition-all z-20"
+                  className="absolute top-4 right-4 w-10 h-10 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white border border-white/20 hover:scale-110 hover:bg-black/60 transition-all z-20 shadow-sm"
                   title={isSaved(act.name) ? "Remove from saved" : "Save this activity"}
                 >
-                  <span className="material-symbols-outlined text-[16px]" style={{fontVariationSettings: isSaved(act.name) ? "'FILL' 1" : "'FILL' 0", color: isSaved(act.name) ? '#ef4444' : 'white'}}>bookmark</span>
+                  <span className="material-symbols-outlined text-[20px]" style={{fontVariationSettings: isSaved(act.name) ? "'FILL' 1" : "'FILL' 0", color: isSaved(act.name) ? '#ef4444' : 'white'}}>bookmark</span>
                 </button>
-              </div>
-              <div className="act-info">
-                <div className="act-title-row">
-                  <h3 className="act-name">{act.name}</h3>
-                  <span className="act-rating"><Star size={14} className="star-icon" fill="currentColor" /> {act.rating}</span>
+                
+                <div className="absolute bottom-4 left-5 text-white pr-4">
+                   <h3 className="text-2xl font-extrabold font-headline tracking-tighter text-white mb-1 drop-shadow-md leading-tight">{act.name}</h3>
                 </div>
-                <div className="act-details-row text-xs text-stone-500 flex gap-3 mt-1">
-                  <span className="act-duration flex items-center gap-1"><Clock size={12} /> {act.duration}</span>
-                  <span className="act-city flex items-center gap-1"><ActivityIcon size={12} /> {act.city}</span>
+              </div>
+              
+              <div className="p-5 bg-surface-container-lowest flex flex-col grow">
+                <div className="flex justify-between items-center mb-3">
+                  <span className="text-xs font-bold text-stone-400 uppercase tracking-widest bg-surface-container px-2.5 py-1 rounded-md">{act.type}</span>
+                  <span className="flex items-center gap-1 text-sm font-bold text-on-surface">
+                     <Star size={14} className="text-amber-500 mb-0.5" fill="currentColor" /> {act.rating}
+                  </span>
+                </div>
+                
+                <div className="flex justify-between items-center text-xs text-on-surface-variant font-medium mt-auto">
+                  <span className="flex items-center gap-1.5"><Clock size={14} className="text-primary/70" /> {act.duration}</span>
+                  <span className="flex items-center gap-1.5"><ActivityIcon size={14} className="text-primary/70" /> {act.city}</span>
                 </div>
               </div>
             </Card>
           ))
         ) : (
-          <div className="text-center py-12 text-white w-full" style={{ gridColumn: '1 / -1' }}>Aucune activité trouvée.</div>
+          <div className="col-span-full text-center py-20 bg-surface-container-lowest/50 rounded-[2rem] border-2 border-dashed border-outline-variant/30 flex flex-col items-center justify-center">
+             <span className="material-symbols-outlined text-stone-300 text-6xl mb-4">search_off</span>
+             <h3 className="text-xl font-bold text-on-surface mb-2">No activities found</h3>
+             <p className="text-on-surface-variant">Try adjusting your filters or search query.</p>
+          </div>
         )}
       </div>
     </div>
