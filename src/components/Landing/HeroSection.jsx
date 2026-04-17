@@ -7,11 +7,11 @@ const HeroSection = () => {
             {/* Background Image */}
             <div className="absolute inset-0 z-0">
                 <img 
-                    className="w-full h-full object-cover brightness-[0.80] sm:brightness-[0.85]" 
-                    alt="Cinematic aerial view of mountains at sunrise" 
-                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuDRGXAc4G0IKkSVYdlQSKrl0eFthcCKDzHh4sMlOt5AFItOJCyjtE6-mCAmQTwz9wtxhpYi7KepShJp1HP_rbTWJPD476hNPKxFXlpIoeUKc_-ODEkXLEQhLVs6JCpsD_gVoyrCL_fOJlsZ9z0qxG6WFzuIcTBkOG_4-5mqs4UjvZaXA1DDau4GHExd8Dcfn6EPv_CxPPwNJ3wIYLKasEB9sMXjPldikZbKa6zNzLoOEVUoDGXLa7_ISuiOeP2rlW8_zX96k1y9M40"
+                    className="w-full h-full object-cover brightness-[0.75] sm:brightness-[0.80]" 
+                    alt="Authentic Moroccan Riad architecture and Zellige" 
+                    src="https://images.unsplash.com/photo-1539020140153-e479b8c22e70?q=80&w=2000&auto=format&fit=crop"
                 />
-                <div className="absolute inset-0 bg-gradient-to-r from-stone-900/60 sm:from-stone-900/40 to-transparent"></div>
+                <div className="absolute inset-0 bg-gradient-to-r from-stone-900/80 sm:from-stone-900/60 to-transparent"></div>
             </div>
 
             {/* Content */}
@@ -24,7 +24,7 @@ const HeroSection = () => {
                         Travel Smarter, <br/>Not Harder
                     </h1>
                     <p className="text-base sm:text-lg md:text-xl text-white/90 leading-relaxed mb-8 sm:mb-10 max-w-lg">
-                        Elevate your global exploration with SafarAI. Experience predictive itineraries and intelligent discovery designed for the modern voyager.
+                        Elevate your exploration of Morocco with SafarAI. Experience authentic medinas, breathtaking dunes, and deep cultural immersion powered by intelligent Discovery.
                     </p>
                     <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 sm:gap-6">
                         <Link 
@@ -43,13 +43,17 @@ const HeroSection = () => {
 
             {/* Floating Weather Card */}
             <div className="absolute bottom-12 right-12 hidden lg:block">
-                <div className="bg-white/10 backdrop-blur-xl p-6 rounded-xl border border-white/20 text-white w-64 shadow-lg">
-                    <div className="flex justify-between items-center mb-4">
-                        <span className="font-bold font-headline">Zermatt, CH</span>
-                        <span className="material-symbols-outlined text-tertiary-container" style={{fontVariationSettings: "'FILL' 1"}}>sunny</span>
+                <div className="bg-white/10 backdrop-blur-xl p-6 rounded-t-[2rem] rounded-b-xl border border-white/20 text-white w-64 shadow-lg shadow-teal-900/20 relative overflow-hidden">
+                    {/* Moroccan subtle pattern overlay */}
+                    <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/arabesque.png')] mix-blend-overlay"></div>
+                    <div className="relative z-10">
+                        <div className="flex justify-between items-center mb-4">
+                            <span className="font-bold font-headline">Marrakech, MA</span>
+                            <span className="material-symbols-outlined text-tertiary-fixed" style={{fontVariationSettings: "'FILL' 1"}}>sunny</span>
+                        </div>
+                        <div className="text-4xl font-bold mb-2 font-headline">28°C</div>
+                        <div className="text-sm opacity-90">Perfect conditions for exploring the Medina.</div>
                     </div>
-                    <div className="text-4xl font-bold mb-2 font-headline">12°C</div>
-                    <div className="text-sm opacity-80">Perfect conditions for Alpine hiking.</div>
                 </div>
             </div>
         </section>

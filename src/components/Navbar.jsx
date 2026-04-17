@@ -1,6 +1,16 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 const Navbar = () => {
+    const [searchQuery, setSearchQuery] = useState('');
+    const navigate = useNavigate();
+
+    const handleSearch = (e) => {
+        if (e.key === 'Enter' && searchQuery.trim() !== '') {
+            navigate(`/activities?search=${encodeURIComponent(searchQuery)}`);
+            setSearchQuery('');
+        }
+    };
     return (
         <header className="hidden md:flex justify-between items-center px-8 h-20 w-full bg-stone-50/80 dark:bg-stone-950/80 backdrop-blur-xl sticky top-0 z-30">
             <div className="flex items-center gap-8">
@@ -21,6 +31,9 @@ const Navbar = () => {
                         className="bg-surface-container border-none rounded-full py-2 pl-10 pr-4 text-sm w-64 focus:ring-1 focus:ring-primary/20 transition-all font-body" 
                         placeholder="Search destinations..." 
                         type="text"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        onKeyDown={handleSearch}
                     />
                 </div>
                 

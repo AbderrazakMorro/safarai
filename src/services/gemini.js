@@ -197,10 +197,28 @@ export const parseResponse = (rawText) => {
     };
   } catch (error) {
     console.warn('[Waterfall] parseResponse JSON parse failed:', error.message);
+    
+    // Attempt fallback regex to extract "text" field if it looks like JSON
+    let textFallback = rawText;
+    try {
+      const textMatch = rawText?.match(/"text"\s*:\s*(?:"|")([\s\S]*?)(?:"|")\s*(?:,|})/);
+      if (textMatch) {
+         textFallback = textMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
+      } else {
+         // Also handle unescaped JSON text block failures if possible
+         const blockMatch = rawText?.match(/"text"\s*:\s*"?([\s\S]*?)”?\n\s*}/);
+         if (blockMatch) {
+            textFallback = blockMatch[1].trim();
+         }
+      }
+    } catch (e) {
+      // Ignore inner errors
+    }
+
     // If it's not JSON, treat it as plain text
     return {
       intent: 'general',
-      text: rawText || "I'm here to help! Ask me anything about Morocco 🇲🇦",
+      text: textFallback || "I'm here to help! Ask me anything about Morocco 🇲🇦",
       weather: null,
       monuments: [],
       itinerary: [],
@@ -249,7 +267,8 @@ RULES:
       }
     ],
     temperature: 0.1, // Low temperature for deterministic classification
-    max_tokens: 200
+    max_tokens: 200,
+    response_format: { type: "json_object" }
     // NO tools — this call is purely for classification
   };
 
@@ -355,9 +374,10 @@ ${JSON.stringify(toolData.results, null, 2)}
 CRITICAL FORMATTING RULES:
 1. You MUST return ONLY a raw JSON object (NOT wrapped in markdown code fences).
 2. Inside the string fields (like "text" and "notes"), use Markdown formatting (bold, bullet points, emojis) to make text beautiful.
-3. Do NOT wrap the response in any schema/type envelope — return the data object DIRECTLY.
+3. Be absolutely certain to escape any newlines in your "text" string as \n (e.g., "Hello\n\nWorld"), and do NOT use actual raw multi-line strings in the JSON.
+4. Do NOT wrap the response in any schema/type envelope — return the data object DIRECTLY.
 
-RESPONSE FORMAT — return EXACTLY this structure (fill in real values):
+RESPONSE FORMAT — return EXACTLY this JSON structure (fill in real values):
 {
   "intent": "recommendation",
   "text": "Your full Markdown response here",
@@ -389,7 +409,8 @@ IMPORTANT RULES:
         role: 'user',
         content: userInput
       }
-    ]
+    ],
+    response_format: { type: "json_object" }
     // NO tools — pure generation
   };
 
@@ -439,7 +460,8 @@ export const getGeminiResponse = async (userInput) => {
             content: 'You are SafarAI, a friendly Moroccan travel assistant. Respond naturally in JSON format with at minimum a "text" field containing your response, and an "intent" field. Keep it brief and helpful.'
           },
           { role: 'user', content: sanitized }
-        ]
+        ],
+        response_format: { type: "json_object" }
       };
       const fallbackMsg = await callGroq(fallbackPayload);
       return parseResponse(fallbackMsg.content || '');
