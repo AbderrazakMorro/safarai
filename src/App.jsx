@@ -18,10 +18,8 @@ import SmartBackpack from './pages/SmartBackpack';
 import Auth from './pages/Auth';
 import Onboarding from './pages/Onboarding';
 import Activities from './pages/Activities';
+import SavedPlaces from './pages/SavedPlaces';
 import FloatingChat from './components/FloatingChat';
-
-// Placeholder views
-const Favorites = () => <div className="p-8"><h2>Favorites</h2><p>Your saved locations</p></div>;
 
 function App() {
   return (
@@ -40,7 +38,7 @@ function App() {
               <Route path="/destinations" element={<Destinations />} />
               <Route path="/activities" element={<Activities />} />
               <Route path="/trips" element={<TripPlanner />} />
-              <Route path="/favorites" element={<Favorites />} />
+              <Route path="/favorites" element={<SavedPlaces />} />
               <Route path="/settings" element={<Preferences />} />
               <Route path="/profile" element={<Profile />} />
               <Route path="/backpack" element={<SmartBackpack />} />

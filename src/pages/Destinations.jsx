@@ -2,11 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Search, Filter, Star, MapPin } from 'lucide-react';
 import Card from '../components/Card';
+import { useSavedPlaces } from '../hooks/useSavedPlaces';
 import './Destinations.css';
 
 const DestinationCard = ({ dest }) => {
   const [imageUrl, setImageUrl] = useState(dest.fallbackImage);
   const navigate = useNavigate();
+  const { isSaved, savePlace, removePlace } = useSavedPlaces();
 
     useEffect(() => {
     let isMounted = true;
@@ -47,6 +49,18 @@ const DestinationCard = ({ dest }) => {
             <Star size={12} fill="currentColor" /> AI Top Pick
           </div>
         )}
+        <button 
+          onClick={(e) => {
+            e.stopPropagation();
+            isSaved(dest.cityName) 
+              ? removePlace(dest.cityName) 
+              : savePlace({ id: dest.cityName, name: dest.cityName, category: 'City', city: dest.cityName, description: `Climate: ${dest.climate}, Budget: ${dest.price}` });
+          }}
+          className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white border border-white/20 hover:scale-110 hover:bg-black/60 transition-all z-20"
+          title={isSaved(dest.cityName) ? "Remove from saved" : "Save this place"}
+        >
+          <span className="material-symbols-outlined text-[16px]" style={{fontVariationSettings: isSaved(dest.cityName) ? "'FILL' 1" : "'FILL' 0", color: isSaved(dest.cityName) ? '#ef4444' : 'white'}}>bookmark</span>
+        </button>
       </div>
       <div className="dest-info">
         <div className="dest-title-row">

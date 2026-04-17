@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Search, Filter, Star, Clock, Activity as ActivityIcon } from 'lucide-react';
 import Card from '../components/Card';
+import { useSavedPlaces } from '../hooks/useSavedPlaces';
 import './Activities.css';
 
 export default function Activities() {
@@ -15,6 +16,7 @@ export default function Activities() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState(initQuery);
   const [activeCity, setActiveCity] = useState(cityQuery);
+  const { isSaved, savePlace, removePlace } = useSavedPlaces();
 
   const filters = ['All', 'Cultural', 'Nature', 'Historic', 'Architecture'];
 
@@ -150,6 +152,18 @@ export default function Activities() {
                     <Star size={12} fill="currentColor" /> AI Top Pick
                   </div>
                 )}
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    isSaved(act.name) 
+                      ? removePlace(act.name) 
+                      : savePlace({ id: act.name, name: act.name, category: act.type, city: act.city, type: 'poi', description: `Recommended duration: ${act.duration}` });
+                  }}
+                  className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white border border-white/20 hover:scale-110 hover:bg-black/60 transition-all z-20"
+                  title={isSaved(act.name) ? "Remove from saved" : "Save this activity"}
+                >
+                  <span className="material-symbols-outlined text-[16px]" style={{fontVariationSettings: isSaved(act.name) ? "'FILL' 1" : "'FILL' 0", color: isSaved(act.name) ? '#ef4444' : 'white'}}>bookmark</span>
+                </button>
               </div>
               <div className="act-info">
                 <div className="act-title-row">

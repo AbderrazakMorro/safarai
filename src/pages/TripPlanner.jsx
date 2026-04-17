@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { MapPin, Navigation, Compass, Loader2, BookOpen, Info, Search, Sparkles } from 'lucide-react';
 import Card from '../components/Card';
 import { generateRoadtripItinerary, generateCityExplorer } from '../services/gemini';
+import { useSavedPlaces } from '../hooks/useSavedPlaces';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -189,6 +190,7 @@ const SECTION_META = {
 // ═══════════════════════════════════════════════════════════════════════
 export default function TripPlanner() {
   const [mode, setMode] = useState('roadtrip'); // 'roadtrip' | 'explore'
+  const { isSaved, savePlace, removePlace } = useSavedPlaces();
 
   // Roadtrip state
   const [origin, setOrigin] = useState('');
@@ -535,6 +537,14 @@ export default function TripPlanner() {
                       </span>
                       <h3 className="text-3xl font-extrabold font-headline tracking-tighter text-white mt-1">{activeStop.stopName}</h3>
                     </div>
+                    {/* Add to Saved Places */}
+                    <button 
+                      onClick={() => isSaved(activeStop.stopName) ? removePlace(activeStop.stopName) : savePlace({...activeStop, id: activeStop.stopName, name: activeStop.stopName, category: 'Roadtrip Stop', city: activeStop.stopName})}
+                      className="absolute top-4 right-4 w-10 h-10 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white border border-white/20 hover:scale-110 hover:bg-black/60 transition-all z-10"
+                      title={isSaved(activeStop.stopName) ? "Remove from saved" : "Save this place"}
+                    >
+                      <span className="material-symbols-outlined text-[20px]" style={{fontVariationSettings: isSaved(activeStop.stopName) ? "'FILL' 1" : "'FILL' 0", color: isSaved(activeStop.stopName) ? '#ef4444' : 'white'}}>bookmark</span>
+                    </button>
                   </div>
                   <div className="p-6 bg-surface-container-lowest">
                     <p className="text-on-surface-variant leading-relaxed text-sm mb-5 border-l-4 border-primary/30 pl-4">{activeStop.description}</p>
@@ -593,6 +603,14 @@ export default function TripPlanner() {
                       <span className="material-symbols-outlined text-amber-400 text-[14px]">{activePoi.popularity >= 8 ? 'local_fire_department' : activePoi.popularity >= 5 ? 'star' : 'diamond'}</span>
                       {activePoi.popularity}/10
                     </div>
+                    {/* Add to Saved Places */}
+                    <button 
+                      onClick={() => isSaved(activePoi.name) ? removePlace(activePoi.name) : savePlace({...activePoi, id: activePoi.name, type: 'poi', city: exploreCity})}
+                      className="absolute top-14 right-4 w-10 h-10 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white border border-white/20 hover:scale-110 hover:bg-black/60 transition-all z-10"
+                      title={isSaved(activePoi.name) ? "Remove from saved" : "Save this place"}
+                    >
+                      <span className="material-symbols-outlined text-[20px]" style={{fontVariationSettings: isSaved(activePoi.name) ? "'FILL' 1" : "'FILL' 0", color: isSaved(activePoi.name) ? '#ef4444' : 'white'}}>bookmark</span>
+                    </button>
                   </div>
                   <div className="p-6 bg-surface-container-lowest">
                     {/* Popularity meter */}
