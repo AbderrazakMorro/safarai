@@ -10,15 +10,61 @@ export default function Dashboard() {
   useEffect(() => {
     const fetchPlaces = async () => {
       try {
-        const clientId = import.meta.env.VITE_FOURSQUARE_CLIENT_ID;
-        const clientSecret = import.meta.env.VITE_FOURSQUARE_CLIENT_SECRET;
-        const response = await fetch(`https://api.foursquare.com/v2/venues/explore?near=Morocco&limit=10&venuePhotos=1&client_id=${clientId}&client_secret=${clientSecret}&v=20231010`);
-        const data = await response.json();
+        const otmKey = import.meta.env.VITE_OPENTRIPMAP_API_KEY;
+        const orKey = import.meta.env.VITE_OPENROUTER_API_KEY;
+
+        // Fetch places from OpenTripMap around Casablanca
+        const lat = 33.5731;
+        const lon = -7.5898;
+        const otmRes = await fetch(`https://api.opentripmap.com/0.1/en/places/radius?radius=10000&lon=${lon}&lat=${lat}&kinds=interesting_places,historic,architecture,cultural&format=json&limit=15&apikey=${otmKey}`);
+        const otmData = await otmRes.json();
         
-        if (data && data.response && data.response.groups && data.response.groups.length > 0) {
+        if (otmData && otmData.length > 0) {
+            const validPlaces = otmData.filter(p => p.name).slice(0, 10);
+            
+            // Generate AI descriptions and categorizations using OpenRouter
+            const prompt = `Here are some places in Casablanca, Morocco from OpenTripMap:
+${validPlaces.map(p => `- ${p.name} (kinds: ${p.kinds})`).join('\n')}
+
+Act as a Moroccan travel concierge. For each place, provide a short, vibrant 1-sentence description that would make a traveler excited to visit, and assign one of these exact categories: Historic, Culture, Outdoors, Food, or Explore.
+Return ONLY a strictly valid JSON array of objects. NO markdown code blocks.
+Format:
+[
+  { "name": "Exact Name", "category": "Category", "description": "Description" }
+]`;
+
+            let enrichedPlaces = [];
+            try {
+                const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${orKey}`
+                    },
+                    body: JSON.stringify({
+                        model: 'google/gemma-4-31b-it:free',
+                        messages: [{ role: 'user', content: prompt }],
+                        temperature: 0.3
+                    })
+                });
+                const orData = await orRes.json();
+                const content = orData?.choices?.[0]?.message?.content?.trim() || "[]";
+                const cleanedContent = content.replace(/```json?\s*/g, '').replace(/```/g, '').trim();
+                enrichedPlaces = JSON.parse(cleanedContent);
+            } catch (e) {
+                console.error("OpenRouter fetch failed:", e);
+                // Fallback if AI fails
+                enrichedPlaces = validPlaces.map(p => ({
+                    name: p.name,
+                    category: p.kinds.includes('historic') ? 'Historic' : 'Explore',
+                    description: `Discover the beauty of ${p.name} in Casablanca.`
+                }));
+            }
+
             const fetchWikipediaImage = async (name) => {
                 try {
-                    const u = `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(name.split(' ')[0])}&prop=pageimages&format=json&pithumbsize=800&origin=*`;
+                    const cleanName = name.split(',')[0].split('-')[0].trim();
+                    const u = `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(cleanName)}&prop=pageimages&format=json&pithumbsize=800&origin=*`;
                     const r = await fetch(u);
                     const j = await r.json();
                     const pages = j.query.pages;
@@ -30,41 +76,25 @@ export default function Dashboard() {
                 return null;
             };
 
-            const items = data.response.groups[0].items;
-            const mappedPlaces = await Promise.all(items.map(async (item, index) => {
-                const venue = item.venue;
-                const category = venue.categories.length > 0 ? venue.categories[0].name : 'Place';
-                
-                let imageUrl = null;
-                try {
-                    const venuePhoto = venue.photos?.groups?.[0]?.items?.[0];
-                    if (venuePhoto) {
-                        let suffix = venuePhoto.suffix;
-                        if (!suffix.startsWith('/')) suffix = '/' + suffix;
-                        imageUrl = `${venuePhoto.prefix}original${suffix}`;
-                    }
-                } catch(e) {}
+            const mappedPlaces = await Promise.all(enrichedPlaces.map(async (loc, index) => {
+                let imageUrl = await fetchWikipediaImage(loc.name);
 
                 if (!imageUrl) {
-                    imageUrl = await fetchWikipediaImage(venue.name);
-                }
-
-                if (!imageUrl) {
-                    const seed = (venue.id ? venue.id.charCodeAt(0) + venue.id.charCodeAt(venue.id.length-1) : index) % 10000;
-                    const cleanCat = category.split(' ')[0].replace(/[^a-zA-Z0-9]/g, '');
+                    const seed = (Math.random() * 10000).toFixed(0);
+                    const cleanCat = (loc.category || 'city').toLowerCase();
                     imageUrl = `https://loremflickr.com/800/600/morocco,${cleanCat}?lock=${seed}`;
                 }
                 
                 return {
-                    id: venue.id,
-                    name: venue.name,
+                    id: `place-${index}`,
+                    name: loc.name,
                     imageUrl,
-                    category,
-                    city: venue.location.city || venue.location.state || 'Morocco',
-                    description: `Recommended ${category.toLowerCase()} in ${venue.location.city || venue.location.state || 'Morocco'}.`
+                    category: loc.category || 'Place',
+                    city: 'Casablanca',
+                    description: loc.description || `Visit ${loc.name}.`
                 };
             }));
-            // We use the first 2 for Concierge Picks, and the next dynamically for Dashboard Activities
+            
             setDashboardActivities(mappedPlaces.slice(2));
             setPlaces(mappedPlaces.slice(0, 2));
         }
@@ -78,7 +108,7 @@ export default function Dashboard() {
         } catch(e) { console.error("Visual Crossing fetch failed", e); }
 
       } catch (error) {
-        console.error("Failed to fetch Foursquare venues:", error);
+        console.error("Failed to fetch dashboard data:", error);
       } finally {
         setLoading(false);
       }

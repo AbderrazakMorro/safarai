@@ -1,9 +1,60 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Search, Filter, Star, MapPin } from 'lucide-react';
+import { Search, Filter, Star, MapPin, Trash2, Calendar, Map as MapIcon } from 'lucide-react';
 import Card from '../components/Card';
 import { useSavedPlaces } from '../hooks/useSavedPlaces';
 import './Destinations.css';
+
+const TripCard = ({ trip, onRemove }) => {
+  const navigate = useNavigate();
+  return (
+    <Card hoverable className="trip-card group overflow-hidden border border-outline-variant/20 bg-surface-container-low shadow-sm hover:shadow-md transition-all active:scale-[0.98]">
+      <div className="relative h-48 overflow-hidden">
+        <img 
+          src={trip.image || `https://loremflickr.com/800/600/morocco,travel?lock=${trip.id}`} 
+          alt={trip.title} 
+          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+        <div className="absolute bottom-4 left-4 right-4 text-white">
+          <div className="flex items-center gap-2 mb-1">
+             <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-widest ${trip.type === 'roadtrip' ? 'bg-primary text-white' : 'bg-amber-500 text-white'}`}>
+               {trip.type}
+             </span>
+             <span className="text-[10px] font-bold text-white/80 uppercase tracking-widest flex items-center gap-1">
+               <Calendar size={10} /> {new Date(trip.savedAt).toLocaleDateString()}
+             </span>
+          </div>
+          <h4 className="text-xl font-bold font-headline leading-tight">{trip.title}</h4>
+        </div>
+        <button 
+          onClick={(e) => { e.stopPropagation(); onRemove(trip.id); }}
+          className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white border border-white/20 hover:bg-red-500/80 transition-all opacity-0 group-hover:opacity-100"
+          title="Delete journey"
+        >
+          <Trash2 size={14} />
+        </button>
+      </div>
+      <div className="p-4 flex flex-col gap-3">
+        <div className="flex items-center justify-between text-xs font-bold text-on-surface-variant uppercase tracking-wider">
+          <span className="flex items-center gap-1"><MapIcon size={12} /> {trip.itinerary?.length || 0} stops</span>
+          {trip.days && <span>{trip.days} Days Plan</span>}
+        </div>
+        <p className="text-sm text-stone-500 line-clamp-2 italic">
+          {trip.type === 'roadtrip' 
+            ? `Your custom route from ${trip.origin} to ${trip.destination}.` 
+            : `Exploring local secrets in ${trip.city}.`}
+        </p>
+        <button 
+          onClick={() => navigate('/trips')}
+          className="w-full py-2.5 bg-surface-container-high rounded-xl text-teal-800 font-bold text-xs hover:bg-primary hover:text-white transition-all border border-outline-variant/10"
+        >
+          View Full Details
+        </button>
+      </div>
+    </Card>
+  );
+};
 
 const DestinationCard = ({ dest }) => {
   const [imageUrl, setImageUrl] = useState(dest.fallbackImage);
@@ -78,12 +129,15 @@ const DestinationCard = ({ dest }) => {
 
 export default function Destinations() {
   const location = useLocation();
-  const initQuery = new URLSearchParams(location.search).get('search') || '';
+  const navigate = useNavigate();
+  const initQuery = new URLSearchParams(location.search).get("search") || "";
 
-  const [activeFilter, setActiveFilter] = useState('All');
+  const [activeFilter, setActiveFilter] = useState("All");
   const [searchQuery, setSearchQuery] = useState(initQuery);
   const [destinations, setDestinations] = useState([]);
   const [visibleCount, setVisibleCount] = useState(100); // Display all cities by default
+
+  const { savedTrips, removeTrip } = useSavedPlaces();
 
     useEffect(() => {
         let isMounted = true;
@@ -137,9 +191,54 @@ export default function Destinations() {
   });
 
   return (
-    <div className="destinations-container page-content glass">
+    <div className="destinations-container page-content glass min-h-screen pb-20">
+      {/* My Journeys Section */}
+      <div className="mb-12 animate-fade-in-up">
+        <div className="flex justify-between items-center mb-6">
+          <div>
+             <h2 className="text-2xl font-bold font-headline text-on-surface tracking-tight">My Journeys</h2>
+             <p className="text-on-surface-variant text-sm font-medium">Revisit the trips you've curated or taken</p>
+          </div>
+          {savedTrips.length > 0 && (
+             <button 
+               onClick={() => navigate('/trips')}
+               className="text-primary text-xs font-bold uppercase tracking-widest hover:underline flex items-center gap-1"
+             >
+               Plan New <MapIcon size={12} />
+             </button>
+          )}
+        </div>
+
+        {savedTrips.length === 0 ? (
+          <div className="bg-surface-container-low/50 border-2 border-dashed border-outline-variant/30 rounded-[2rem] p-10 text-center">
+             <div className="w-16 h-16 bg-surface-container-high rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <span className="material-symbols-outlined text-stone-300 text-3xl">add_location_alt</span>
+             </div>
+             <h3 className="text-lg font-bold text-on-surface font-headline mb-1">No saved trips yet</h3>
+             <p className="text-sm text-on-surface-variant mb-6 max-w-xs mx-auto">Generate a custom roadtrip to see your adventures appear here.</p>
+             <button 
+               onClick={() => navigate('/trips')}
+               className="px-6 py-2.5 bg-primary text-white rounded-xl font-bold text-xs shadow-md hover:scale-105 active:scale-95 transition-all"
+             >
+               Go to Roadtrip Planner
+             </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {savedTrips.map(trip => (
+              <TripCard key={trip.id} trip={trip} onRemove={removeTrip} />
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="h-[1px] w-full bg-outline-variant/10 mb-12"></div>
+
       <div className="destinations-header">
-        <h2>Explore Destinations</h2>
+        <div>
+          <h2>Discover Destinations</h2>
+          <p className="text-on-surface-variant text-sm font-medium">Find your next perfect stop in the Kingdom</p>
+        </div>
         <div className="destinations-controls">
           <div className="search-box">
             <Search size={18} className="search-icon" />

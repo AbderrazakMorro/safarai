@@ -6,10 +6,9 @@ const Navbar = () => {
 
     return (
         <nav className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-xl transition-colors duration-300">
-            <div className="max-w-7xl mx-auto flex justify-between items-center px-4 sm:px-6 md:px-8 py-3 md:py-4">
-                <Link to="/" className="flex items-center gap-2">
-                    <img src="/logo.png" alt="SafarAI Logo" className="w-12 h-12 sm:w-16 sm:h-16 md:w-20 md:h-20 object-contain" />
-                    <span className="text-xl sm:text-2xl font-bold text-teal-700 tracking-tighter font-headline">SafarAI</span>
+            <div className="max-w-7xl mx-auto flex justify-between items-center px-4 sm:px-6 md:px-8 py-1 md:py-1">
+                <Link to="/" className="flex items-center">
+                    <img src="/logonav.png" alt="SafarAI Logo" className="w-20 h-20 sm:w-28 sm:h-28 md:w-40 md:h-40 object-contain" />
                 </Link>
 
                 <div className="hidden md:flex items-center gap-8">
@@ -20,15 +19,15 @@ const Navbar = () => {
                 </div>
 
                 <div className="flex items-center gap-3">
-                    <Link 
-                        to="/login" 
+                    <Link
+                        to="/login"
                         className="hidden sm:inline-flex bg-primary hover:bg-primary-container text-white px-5 md:px-6 py-2 md:py-2.5 rounded-full font-semibold transition-all active:scale-95 font-headline tracking-tight shadow-sm text-sm md:text-base"
                     >
                         Start Journey
                     </Link>
-                    
+
                     {/* Mobile hamburger */}
-                    <button 
+                    <button
                         className="md:hidden p-2 text-stone-600 hover:bg-stone-100 rounded-xl transition-colors"
                         onClick={() => setMobileOpen(!mobileOpen)}
                     >
@@ -44,8 +43,8 @@ const Navbar = () => {
                     <a className="block text-stone-500 hover:text-teal-700 transition-colors font-headline tracking-tight py-2" href="#">Weather</a>
                     <a className="block text-stone-500 hover:text-teal-700 transition-colors font-headline tracking-tight py-2" href="#">Destinations</a>
                     <a className="block text-stone-500 hover:text-teal-700 transition-colors font-headline tracking-tight py-2" href="#">Packing</a>
-                    <Link 
-                        to="/login" 
+                    <Link
+                        to="/login"
                         className="block w-full text-center bg-primary text-white px-6 py-3 rounded-full font-semibold font-headline mt-4"
                     >
                         Start Journey

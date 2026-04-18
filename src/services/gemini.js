@@ -8,42 +8,40 @@
  *   Stage 3: generateFinalResponse() — LLM generates the final formatted response in user's language
  */
 
-const API_KEY = import.meta.env.VITE_GROQ_API_KEY;
+const OPENROUTER_KEY = import.meta.env.VITE_OPENROUTER_API_KEY;
+const GROQ_KEY = import.meta.env.VITE_GROQ_API_KEY;
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
-const MODEL_NAME = 'llama-3.3-70b-versatile';
-const ENDPOINT = 'https://api.groq.com/openai/v1/chat/completions';
+
+const OPENROUTER_MODEL = 'google/gemma-3-27b-it:free';
+const GROQ_MODEL = 'llama-3.3-70b-versatile';
+
+const OPENROUTER_ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions';
+const GROQ_ENDPOINT = 'https://api.groq.com/openai/v1/chat/completions';
 const GEMINI_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
 
+// For backward compatibility in existing code
+const API_KEY = GROQ_KEY || OPENROUTER_KEY;
+const MODEL_NAME = GROQ_KEY ? GROQ_MODEL : OPENROUTER_MODEL;
+const ENDPOINT = GROQ_KEY ? GROQ_ENDPOINT : OPENROUTER_ENDPOINT;
 
-// ─── Translation Utility (via Groq — Gemini quota exhausted) ────────────────
-// Detects the user's language and translates to/from using Groq LLM.
+
+// ─── Translation Utility (via OpenRouter — Gemini quota exhausted) ────────────────
+// Detects the user's language and translates to/from using OpenRouter LLM.
 
 const callTranslation = async (prompt) => {
-  if (!API_KEY) {
-    console.warn('[Translation] Groq API key missing, skipping translation');
-    return null;
-  }
   try {
-    const res = await fetch(ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${API_KEY}`
-      },
-      body: JSON.stringify({
-        model: MODEL_NAME,
-        messages: [
-          { role: 'system', content: 'You are a precise translation engine. Follow the user instructions exactly. Return ONLY what is asked, no explanations.' },
-          { role: 'user', content: prompt }
-        ],
-        temperature: 0.1,
-        max_tokens: 1000
-      })
+    const res = await callGroq({
+      model: MODEL_NAME,
+      messages: [
+        { role: 'system', content: 'ROLE: You are a precise and expert translation engine.\\nCONTEXT: You are processing raw user text for a Moroccan travel application.\\nTASK: Translate the given text according to the user instructions, following them exactly.\\nFORMAT: Return ONLY the translated string. Do not include any explanations, markdown code blocks, or preamble.' },
+        { role: 'user', content: prompt }
+      ],
+      temperature: 0.1,
+      max_tokens: 1000
     });
-    const data = await res.json();
-    return data?.choices?.[0]?.message?.content?.trim() || null;
+    return res?.content?.trim() || null;
   } catch (e) {
-    console.error('[Translation] Groq translation call failed:', e);
+    console.error('[Translation] API call failed:', e);
     return null;
   }
 };
@@ -55,18 +53,21 @@ const callTranslation = async (prompt) => {
 const detectAndTranslate = async (userInput) => {
   console.log('[Waterfall] Stage 0: Detecting language...');
 
-  const prompt = `Analyze this text and respond ONLY with a JSON object, no markdown fences:
+  const prompt = `ROLE: You are a multilingual language detection and translation engine for SafarAI.
+CONTEXT: We need to determine the user's language to translate their input into English for backend processing. Moroccan users might use Arabizi (Latin-script Moroccan Arabic) or formal Arabic.
+TASK: Analyze the provided user text, detect the exact language, and translate it to English if it is not already in English.
+FORMAT: Respond ONLY with a standard JSON object, without any markdown fences or explanation. Use this structure:
 {
-  "language": "the ISO language code (en, fr, ar, darija, es, etc.)",
-  "language_name": "the full name of the language (English, French, Darija, Arabic, etc.)",
-  "english_translation": "the English translation of the text, or the original text if already in English"
+  "language": "ISO language code (en, fr, ar, darija, es, etc.)",
+  "language_name": "Full name of the language (English, French, Darija, Arabic, etc.)",
+  "english_translation": "The English translation of the text, or the original text if already in English"
 }
 
-IMPORTANT for Darija (Moroccan Arabic):
-- If the text contains Arabizi (Latin-script Moroccan Arabic like 'kifach', 'wach', 'salam', 'labas', 'fin', 'chno', 'hani', 'zwin', 'bghit', etc.), classify it as "darija"
-- Also classify Arabic-script Moroccan dialect as "darija"
+IMPORTANT for Darija:
+- If the text contains Arabizi (e.g., 'kifach', 'wach', 'salam', 'labas', 'fin'), classify it as "darija".
+- If the text is Arabic-dialect specific to Morocco, classify it as "darija".
 
-Text: "${userInput}"`;
+Text to process: "${userInput}"`;
 
   const result = await callTranslation(prompt);
 
@@ -104,7 +105,7 @@ const translateResponse = async (text, targetLang, targetLangName) => {
   console.log(`[Waterfall] Force-translating response to ${targetLangName}...`);
 
   let langInstruction = `Translate the following text to ${targetLangName}.`;
-  
+
   if (targetLang === 'darija') {
     langInstruction = `Translate the following text to Darija (Moroccan Arabic). 
 You MUST write the translation in Arabizi (Latin script, like: "salam, kifach nta? labas 3lik?").
@@ -116,9 +117,10 @@ Use natural everyday Moroccan dialect, not formal Arabic.`;
     langInstruction = `Translate the following text to Modern Standard Arabic (MSA). Use Arabic script.`;
   }
 
-  const prompt = `${langInstruction}
-Keep all Markdown formatting (bold, bullets, emojis) intact.
-Do NOT add any explanation or preamble, just return the translated text directly.
+  const prompt = `ROLE: You are a professional translator specializing in natural, conversational localization.
+CONTEXT: A Moroccan travel concierge AI has generated a response. We need to present this response to the user in their requested language while preserving all original formatting.
+TASK: ${langInstruction}
+FORMAT: Keep all Markdown formatting (bold, bullets, emojis) intact. Do NOT add any explanation or preamble, just return the translated text directly.
 
 Text to translate:
 ${text}`;
@@ -132,11 +134,13 @@ ${text}`;
  */
 const translateSuggestions = async (suggestions, targetLang, targetLangName) => {
   if (targetLang === 'en' || !suggestions || suggestions.length === 0) return suggestions;
-  
-  const prompt = `Translate each of these suggestions to ${targetLangName}.
-${targetLang === 'darija' ? 'Use Arabizi (Latin script Moroccan Arabic with numbers: 3=ع, 7=ح, 9=ق).' : ''}
-Return ONLY a JSON array of translated strings, no explanation.
 
+  const prompt = `ROLE: You are a professional text localizer.
+CONTEXT: We have quick-reply suggestions for a chat interface that need to match the user's language.
+TASK: Translate each of these suggestions to ${targetLangName}. ${targetLang === 'darija' ? 'Use Arabizi (Latin script Moroccan Arabic with numbers: 3=ع, 7=ح, 9=ق).' : ''}
+FORMAT: Return ONLY a valid JSON array of translated strings. Do not include any explanations or markdown fences.
+
+Suggestions to translate:
 ${JSON.stringify(suggestions)}`;
 
   const result = await callTranslation(prompt);
@@ -145,7 +149,7 @@ ${JSON.stringify(suggestions)}`;
       const cleaned = result.replace(/```json?\s*/g, '').replace(/```/g, '').trim();
       const parsed = JSON.parse(cleaned);
       if (Array.isArray(parsed)) return parsed;
-    } catch(e) {}
+    } catch (e) { }
   }
   return suggestions;
 };
@@ -261,36 +265,117 @@ export const buildContext = () => {
 // ─── 4. API Caller ─────────────────────────────────────────────────────────
 
 export const callGroq = async (payload) => {
-  if (!API_KEY) {
-    throw new Error('API Key is missing. Please check your .env.local file.');
+  let lastError = null;
+
+  // --- ATTEMPT 1: GROQ (Primary & Fastest) ---
+  if (GROQ_KEY) {
+    try {
+      console.log('[AI] Attempting Groq (llama-3.3-70b)...');
+      const response = await fetch(GROQ_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${GROQ_KEY}`
+        },
+        body: JSON.stringify({
+          ...payload,
+          model: GROQ_MODEL
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.choices?.[0]?.message) return data.choices[0].message;
+      } else {
+        const err = await response.json().catch(() => ({}));
+        console.warn('[AI] Groq failed:', err.error?.message || response.status);
+      }
+    } catch (e) {
+      console.warn('[AI] Groq fetch error:', e.message);
+      lastError = e;
+    }
   }
 
-  try {
-    const response = await fetch(ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${API_KEY}`
-      },
-      body: JSON.stringify(payload),
-    });
+  // --- ATTEMPT 2: OPENROUTER (Secondary Fallback) ---
+  if (OPENROUTER_KEY) {
+    try {
+      console.log('[AI] Falling back to OpenRouter (gemma-3)...');
+      
+      // OpenRouter free models often require system -> user message conversion
+      const safeMessages = payload.messages.map(m => {
+        if (m.role === 'system') {
+          return { role: 'user', content: `[SYSTEM INSTRUCTION]\n${m.content}\n[END SYSTEM INSTRUCTION]` };
+        }
+        return m;
+      });
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      console.error('API Error Response:', errorData);
-      throw new Error(errorData.error?.message || `HTTP ${response.status}: ${response.statusText}`);
-    }
+      const response = await fetch(OPENROUTER_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${OPENROUTER_KEY}`
+        },
+        body: JSON.stringify({
+          ...payload,
+          model: OPENROUTER_MODEL,
+          messages: safeMessages
+        }),
+      });
 
-    const data = await response.json();
-    if (!data.choices?.[0]?.message) {
-      console.error('API Empty Response:', data);
-      throw new Error('AI returned an empty response');
+      if (response.ok) {
+        const data = await response.json();
+        if (data.choices?.[0]?.message) return data.choices[0].message;
+      } else {
+        const err = await response.json().catch(() => ({}));
+        console.error('[AI] OpenRouter fallback failed:', err.error?.message || response.status);
+        lastError = new Error(err.error?.message || `HTTP ${response.status}`);
+      }
+    } catch (e) {
+      console.error('[AI] OpenRouter fetch error:', e.message);
+      lastError = e;
     }
-    return data.choices[0].message;
-  } catch (error) {
-    console.error('Fetch Error:', error);
-    throw error;
   }
+
+  // --- FALLBACK TO DIRECT GOOGLE GEMINI ---
+  const GEMINI_KEY = import.meta.env.VITE_GEMINI_API_KEY;
+  if (GEMINI_KEY && openRouterError) {
+    console.log('[Fallback] OpenRouter failed, calling Google Gemini direct API...');
+    try {
+      const systemPrompt = payload.messages.find(m => m.role === 'system')?.content || '';
+      const userMsgs = payload.messages.filter(m => m.role !== 'system').map(m => ({
+        role: m.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: m.content }]
+      }));
+
+      const geminiPayload = {
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        contents: userMsgs,
+        generationConfig: {
+          temperature: payload.temperature || 0.1
+        }
+      };
+      if (payload.response_format?.type === 'json_object') {
+        geminiPayload.generationConfig.responseMimeType = "application/json";
+      }
+
+      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`;
+      const gRes = await fetch(geminiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(geminiPayload) });
+
+      if (gRes.ok) {
+        const gData = await gRes.json();
+        if (gData.candidates && gData.candidates[0].content.parts[0].text) {
+          return { content: gData.candidates[0].content.parts[0].text };
+        }
+      } else {
+        const gErr = await gRes.json().catch(() => ({}));
+        console.error('Gemini Fallback Error Response:', gErr);
+      }
+    } catch (gem_err) {
+      console.error('Gemini Fallback Exception:', gem_err);
+    }
+  }
+
+  throw openRouterError;
 };
 
 // Keep legacy alias for any external imports
@@ -378,26 +463,20 @@ const analyzeIntent = async (userInput) => {
     messages: [
       {
         role: 'system',
-        content: `You are an intent classifier for SafarAI, a Moroccan travel assistant.
-IMPORTANT: The user's message has already been translated to English for you. Classify based on the English meaning.
-
-Given the user's message, extract the following as a JSON object:
+        content: `ROLE: You are an expert intent classifier for SafarAI, a Moroccan travel assistant.
+CONTEXT: The user's input has been translated to English. We need to route their request to the correct data-fetching tool.
+TASK: Classify the user's intent into a specific category, and extract any relevant location or search keywords based on their English meaning.
+FORMAT: Return ONLY a raw JSON object (no markdown fences) with the exact structure below:
 
 {
   "intent": "EXPLORE" | "WEATHER" | "CULTURE" | "CHAT",
-  "city": "city name or null",
-  "lat": number or null,
-  "lon": number or null,
-  "kinds": "comma-separated OpenTripMap categories or null"
+  "city": "string (the extracted city/town name, or null if none)",
+  "lat": "number (extract explicit latitude, or null)",
+  "lon": "number (extract explicit longitude, or null)",
+  "kinds": "string (comma-separated OpenTripMap categories, or null)"
 }
 
 RULES:
-- "EXPLORE": User wants to discover places, landmarks, restaurants, activities, things to do, or asks about a specific location. Also use for "I'm bored", "I'm hungry", "what's nearby".
-- "WEATHER": User asks about weather, temperature, climate, what to wear.
-- "CULTURE": User asks about Moroccan history, traditions, food recipes, language, customs, art, music.
-- "CHAT": Greetings, small talk, jokes, general questions not about Morocco travel.
-- For "city": Extract the city/town name mentioned. If none mentioned, set to null.
-- For "lat"/"lon": Only set if the user provides explicit coordinates. Otherwise set to null (the system will resolve coordinates from the city name).
 - For "kinds": Use OpenTripMap categories like "historic", "cultural", "natural", "architecture", "foods", "shops", "amusements", "interesting_places". Combine with commas. Set null for CHAT/CULTURE.
 - Return ONLY the JSON object, nothing else.`
       },
@@ -407,8 +486,7 @@ RULES:
       }
     ],
     temperature: 0.1, // Low temperature for deterministic classification
-    max_tokens: 200,
-    response_format: { type: "json_object" }
+    max_tokens: 200
     // NO tools — this call is purely for classification
   };
 
@@ -486,67 +564,36 @@ const executeTools = async (intentResult) => {
 const generateFinalResponse = async (userInput, intentResult, toolData, context, langInfo, isAuthenticated = true) => {
   console.log('[Waterfall] Stage 3: Generating final response... (auth:', isAuthenticated, ')');
 
-  const systemPrompt = `# SafarAI — Your Moroccan Travel Concierge
+  const systemPrompt = `ROLE: You are SafarAI, the digital concierge and expert travel companion for Moroccan travelers.
+CONTEXT: You assist travelers with authentic, expert-level travel advice for Morocco. You must act as a natural, local human expert. The user's detected language is **${langInfo?.langName || 'English'}**. 
+${toolData ? `REAL-TIME DATA: You fetched the following places near (${toolData.coordinates.lat}, ${toolData.coordinates.lon}) for ${toolData.city}:
+${JSON.stringify(toolData.results, null, 2)}` : 'REAL-TIME DATA: No external data fetched. Answer using your internal knowledge.'}
+DETECTED INTENT: ${intentResult.intent}
 
-## 1. Identity & Context
-- You are SafarAI, the digital companion for Moroccan travelers.
-- Your goal is to provide authentic, expert-level travel advice for Morocco.
+TASK: Generate a final response based on the user's input and preferences. Provide local secrets (e.g., if asked about Ifrane, mention the Al Akhawayn campus or Stone Lion). Use real place names from the data provided—do not hallucinate fictional places.
+You MUST write all your responses in **${langInfo?.langName || 'English'}**. If the language is Darija, write exclusively in Arabizi.
 
-## 2. Communication Guidelines
-- Authentic Voice: Always respond as a natural, local human expert. Do not use generic robotic placeholders.
-- Proactive Expert: If a user asks about a place, automatically mention a local secret (e.g., if they ask about Ifrane, mention the *Al Akhawayn campus* or *Stone Lion*).
-- Multilingualism: The user's detected language is **${langInfo?.langName || 'English'}**. You MUST write all your responses in **${langInfo?.langName || 'English'}**. If the language is Darija, write in Arabizi (Latin script Moroccan Arabic). If French, write in French. Always match the user's language.
-- No Format Requirements: Allow the user to speak naturally. Do not ask for specific parameters if you can infer them.
+FORMAT: You MUST return ONLY a raw JSON object (NO markdown fences or schema wrappers). The 'text' field must contain your main conversation properly formatted with markdown (bold, lists, emojis), with newlines properly escaped as \\\\n.
 
-## 3. Detected Intent: ${intentResult.intent}
-${toolData ? `
-## 4. Real-Time Data (from OpenTripMap for ${toolData.city})
-The following landmarks/places were found near coordinates (${toolData.coordinates.lat}, ${toolData.coordinates.lon}).
-Use this data to enrich your response — mention real place names, don't hallucinate fictional ones.
-
-\`\`\`json
-${JSON.stringify(toolData.results, null, 2)}
-\`\`\`
-` : `
-## 4. No external data was fetched for this query. Answer using your internal knowledge.
-`}
-
-CRITICAL FORMATTING RULES:
-1. You MUST return ONLY a raw JSON object (NOT wrapped in markdown code fences).
-2. Inside the string fields (like "text" and "notes"), use Markdown formatting (bold, bullet points, emojis) to make text beautiful.
-3. Be absolutely certain to escape any newlines in your "text" string as \n (e.g., "Hello\n\nWorld"), and do NOT use actual raw multi-line strings in the JSON.
-4. Do NOT wrap the response in any schema/type envelope — return the data object DIRECTLY.
-
-RESPONSE FORMAT — return EXACTLY this JSON structure (fill in real values):
 {
-  "intent": "recommendation",
-  "text": "Your full Markdown response here",
-  "destination": "City name or empty string",
-  "duration": "e.g. 3 days or empty string",
-  "budget": "e.g. 500 MAD or empty string",
+  "intent": "string (the conversation state, e.g., recommendation)",
+  "text": "string (Your full proper Markdown response. Give brief teaser if guest user. Add 🔐 Sign up for free at the end if guest.)",
+  "destination": "string (City name or empty)",
+  "duration": "string (e.g., 3 days or empty)",
+  "budget": "string (e.g., 500 MAD or empty)",
   "weather": { "condition": "Sunny", "temperature": "22°C" },
   "monuments": [{ "name": "Place Name", "description": "Brief description" }],
   "itinerary": [{ "day": 1, "activities": ["Activity 1"], "estimated_cost": "200 MAD", "notes": "Tip" }],
   "suggestions": ["Follow-up suggestion 1", "Follow-up suggestion 2"]
 }
 
-IMPORTANT RULES:
-- Return ONLY the JSON object, no explanation before or after
-- Leave "weather" as null if not relevant
-- Leave "monuments" as [] if not a location query
-- Leave "itinerary" as [] if not a trip planning request
-- The "text" field is ALWAYS required — this is your main conversational response
-- Use realistic data. Do not hallucinate unknown information.
+RULES:
+- Leave arrays empty [] if not directly applicable.
+- Leave objects null if not directly applicable.
+- The "text" field is ALWAYS required.
+- Do NOT wrap the response in any schema/type envelope.
 ${!isAuthenticated ? `
-## IMPORTANT — GUEST USER (NOT LOGGED IN)
-This user is NOT signed up. You must:
-- Give only a SHORT teaser/overview (2-3 sentences max) about the topic
-- Do NOT give full itineraries, detailed lists, or complete recommendations
-- Do NOT fill the "itinerary" array — leave it empty []
-- Limit "monuments" to at most 1 item
-- At the END of your "text", ALWAYS add this line: "\n\n🔐 **Sign up for free** to unlock full itineraries, personalized recommendations, and exclusive local tips!"
-- Keep it enticing so they want to sign up
-` : ''}`;
+- GUEST USER: Limit text to 2-3 sentences. Limit monuments to 1. Leave itinerary empty. Append "\\n\\n🔐 **Sign up for free** to unlock full itineraries!" to the text.` : ''}`;
 
   const payload = {
     model: MODEL_NAME,
@@ -559,8 +606,7 @@ This user is NOT signed up. You must:
         role: 'user',
         content: userInput
       }
-    ],
-    response_format: { type: "json_object" }
+    ]
     // NO tools — pure generation
   };
 
@@ -622,11 +668,10 @@ export const getGeminiResponse = async (userInput, { isAuthenticated = true } = 
         messages: [
           {
             role: 'system',
-            content: 'You are SafarAI, a friendly Moroccan travel assistant. Respond naturally in JSON format with at minimum a "text" field containing your response, and an "intent" field. Keep it brief and helpful.'
+            content: 'ROLE: You are SafarAI, a friendly Moroccan travel assistant.\\nCONTEXT: The user is requesting travel help.\\nTASK: Answer intelligently and assist the user.\\nFORMAT: Respond naturally in JSON format with at minimum a "text" field containing your response, and an "intent" field. Keep it brief and helpful.'
           },
           { role: 'user', content: sanitized }
-        ],
-        response_format: { type: "json_object" }
+        ]
       };
       const fallbackMsg = await callGroq(fallbackPayload);
       return parseResponse(fallbackMsg.content || '');
@@ -643,7 +688,7 @@ export const getGeminiResponse = async (userInput, { isAuthenticated = true } = 
  */
 export const generateRoadtripItinerary = async (origin, destination, days = 3) => {
   if (!API_KEY) {
-    console.error('[Roadtrip] Groq API key missing.');
+    console.error('[Roadtrip] OpenRouter API key missing.');
     return null;
   }
 
@@ -669,28 +714,29 @@ Constraints:
 - The first stop should be the departure or nearby, the last should be near the destination or the destination itself.`;
 
   try {
-    const res = await fetch(ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${API_KEY}`
-      },
-      body: JSON.stringify({
-        model: MODEL_NAME,
-        messages: [
-          { role: 'system', content: 'You are a Moroccan travel itinerary API. Output perfectly valid JSON arrays only.' },
-          { role: 'user', content: prompt }
-        ],
-        temperature: 0.3,
-        max_completion_tokens: 1500
-      })
-    });
-    const data = await res.json();
-    const content = data?.choices?.[0]?.message?.content?.trim();
+    const payload = {
+      model: MODEL_NAME,
+      messages: [
+        { role: 'system', content: 'ROLE: You are a Moroccan travel itinerary API.\nCONTEXT: The user needs a multi-day route planner.\nTASK: Generate realistic roadtrip stops and activities.\nFORMAT: Output perfectly valid JSON arrays only without markdown formatting.' },
+        { role: 'user', content: prompt }
+      ],
+      temperature: 0.3,
+      max_tokens: 1500
+    };
+
+    const message = await callGroq(payload);
+    const content = message.content?.trim();
     if (!content) return null;
 
-    const cleaned = content.replace(/```json?\s*/g, '').replace(/```/g, '').trim();
-    return JSON.parse(cleaned);
+    // Robust JSON extraction: look for [ ... ]
+    const startBracket = content.indexOf('[');
+    const endBracket = content.lastIndexOf(']');
+    if (startBracket === -1 || endBracket === -1) {
+      console.error('[Roadtrip] No JSON array found in response:', content);
+      return null;
+    }
+    const jsonStr = content.substring(startBracket, endBracket + 1);
+    return JSON.parse(jsonStr);
   } catch (e) {
     console.error('[Roadtrip] Itinerary generation failed:', e);
     return null;
@@ -703,7 +749,7 @@ Constraints:
  */
 export const generateCityExplorer = async (cityName) => {
   if (!API_KEY) {
-    console.error('[CityExplorer] Groq API key missing.');
+    console.error('[CityExplorer] OpenRouter API key missing.');
     return null;
   }
 
@@ -732,28 +778,30 @@ Constraints:
 - Include at least 3-4 hidden gems (popularity 1-3) that only locals know about.`;
 
   try {
-    const res = await fetch(ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${API_KEY}`
-      },
-      body: JSON.stringify({
-        model: MODEL_NAME,
-        messages: [
-          { role: 'system', content: 'You are a Moroccan city exploration API. Output perfectly valid JSON arrays only. Generate comprehensive, large lists.' },
-          { role: 'user', content: prompt }
-        ],
-        temperature: 0.4,
-        max_completion_tokens: 4000
-      })
-    });
-    const data = await res.json();
-    const content = data?.choices?.[0]?.message?.content?.trim();
+    const payload = {
+      model: MODEL_NAME,
+      messages: [
+        { role: 'system', content: 'ROLE: You are a Moroccan city exploration API.\nCONTEXT: The user is exploring an individual city and needs a comprehensive catalog of landmarks.\nTASK: Curate a diverse and expansive list of locations.\nFORMAT: Output perfectly valid JSON arrays only without markdown formatting.' },
+        { role: 'user', content: prompt }
+      ],
+      temperature: 0.4,
+      max_tokens: 4000
+    };
+
+    const message = await callGroq(payload);
+    const content = message.content?.trim();
     if (!content) return null;
 
-    const cleaned = content.replace(/```json?\s*/g, '').replace(/```/g, '').trim();
-    const parsed = JSON.parse(cleaned);
+    // Robust JSON extraction: look for [ ... ]
+    const startBracket = content.indexOf('[');
+    const endBracket = content.lastIndexOf(']');
+    if (startBracket === -1 || endBracket === -1) {
+      console.error('[CityExplorer] No JSON array found in response:', content);
+      return null;
+    }
+    const jsonStr = content.substring(startBracket, endBracket + 1);
+    const parsed = JSON.parse(jsonStr);
+
     // Sort by popularity descending (most seen first)
     return parsed.sort((a, b) => (b.popularity || 5) - (a.popularity || 5));
   } catch (e) {

@@ -188,3 +188,33 @@
   font-weight: 600;
   color: var(--primary);
 }
+
+/* My Journeys / Trip Cards */
+.trip-card {
+  padding: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  height: 100%;
+}
+
+.trip-card .remove-btn {
+  transition: all 0.2s ease;
+  transform: translateY(-5px);
+  opacity: 0;
+}
+
+.trip-card:hover .remove-btn {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+@media (max-width: 768px) {
+  .destinations-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .search-box {
+    width: 100%;
+  }
+}

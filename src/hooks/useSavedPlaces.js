@@ -1,18 +1,21 @@
 import { useState, useEffect } from 'react';
 
 const SAVED_PLACES_KEY = 'safarai_saved_places_v1';
+const SAVED_TRIPS_KEY = 'safarai_trips_v1';
 
 export function useSavedPlaces() {
   const [savedPlaces, setSavedPlaces] = useState([]);
+  const [savedTrips, setSavedTrips] = useState([]);
 
   useEffect(() => {
     try {
-      const stored = localStorage.getItem(SAVED_PLACES_KEY);
-      if (stored) {
-        setSavedPlaces(JSON.parse(stored));
-      }
+      const storedPlaces = localStorage.getItem(SAVED_PLACES_KEY);
+      if (storedPlaces) setSavedPlaces(JSON.parse(storedPlaces));
+      
+      const storedTrips = localStorage.getItem(SAVED_TRIPS_KEY);
+      if (storedTrips) setSavedTrips(JSON.parse(storedTrips));
     } catch (e) {
-      console.error('Failed to load saved places', e);
+      console.error('Failed to load travel data', e);
     }
   }, []);
 
@@ -54,5 +57,29 @@ export function useSavedPlaces() {
     return savedPlaces.some(p => p.id === id);
   };
 
-  return { savedPlaces, savePlace, removePlace, isSaved };
+  const saveTrip = (tripData) => {
+    // tripData: { id, title, origin, destination, days, itinerary, type: 'roadtrip'|'explore' }
+    const newTrip = {
+      ...tripData,
+      id: tripData.id || `trip-${Date.now()}`,
+      savedAt: new Date().toISOString()
+    };
+
+    setSavedTrips((prev) => {
+      if (prev.some(t => t.id === newTrip.id)) return prev;
+      const newSaved = [newTrip, ...prev];
+      localStorage.setItem(SAVED_TRIPS_KEY, JSON.stringify(newSaved));
+      return newSaved;
+    });
+  };
+
+  const removeTrip = (id) => {
+    setSavedTrips((prev) => {
+      const newSaved = prev.filter(t => t.id !== id);
+      localStorage.setItem(SAVED_TRIPS_KEY, JSON.stringify(newSaved));
+      return newSaved;
+    });
+  };
+
+  return { savedPlaces, savePlace, removePlace, isSaved, savedTrips, saveTrip, removeTrip };
 }
