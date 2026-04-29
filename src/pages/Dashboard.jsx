@@ -42,23 +42,27 @@ Format:
                         'Authorization': `Bearer ${orKey}`
                     },
                     body: JSON.stringify({
-                        model: 'google/gemma-4-31b-it:free',
+                        model: 'google/gemma-2-9b-it:free',
                         messages: [{ role: 'user', content: prompt }],
                         temperature: 0.3
                     })
                 });
+                if (!orRes.ok) throw new Error("OpenRouter API Error");
                 const orData = await orRes.json();
                 const content = orData?.choices?.[0]?.message?.content?.trim() || "[]";
                 const cleanedContent = content.replace(/```json?\s*/g, '').replace(/```/g, '').trim();
                 enrichedPlaces = JSON.parse(cleanedContent);
             } catch (e) {
-                console.error("OpenRouter fetch failed:", e);
-                // Fallback if AI fails
-                enrichedPlaces = validPlaces.map(p => ({
-                    name: p.name,
-                    category: p.kinds.includes('historic') ? 'Historic' : 'Explore',
-                    description: `Discover the beauty of ${p.name} in Casablanca.`
-                }));
+                console.error("OpenRouter fetch failed, using reliable fallback data:", e);
+                // Fallback to beautiful default places to keep the dashboard populated
+                enrichedPlaces = [
+                    { name: 'Hassan II Mosque', category: 'Historic', description: 'Marvel at the stunning architecture and ocean views of this iconic landmark.' },
+                    { name: 'Ain Diab Corniche', category: 'Outdoors', description: 'Enjoy a vibrant sunset walk along the bustling Atlantic coastline.' },
+                    { name: 'Old Medina', category: 'Culture', description: 'Get lost in the winding, historical alleyways filled with traditional crafts.' },
+                    { name: 'Royal Palace of Casablanca', category: 'Historic', description: 'Experience the grandeur of Moroccan royal architecture.' },
+                    { name: 'Parc de la Ligue Arabe', category: 'Explore', description: 'Relax in the largest public park in the city center.' },
+                    { name: 'Villa des Arts', category: 'Culture', description: 'Discover contemporary Moroccan art in a gorgeous Art Deco villa.' }
+                ];
             }
 
             const fetchWikipediaImage = async (name) => {
