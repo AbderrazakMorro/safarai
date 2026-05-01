@@ -1,14 +1,78 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { supabase } from '../lib/supabase';
 
 export default function Auth() {
     const [isLogin, setIsLogin] = useState(true);
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [name, setName] = useState('');
+    const [error, setError] = useState(null);
+    const [loading, setLoading] = useState(false);
+    
     const navigate = useNavigate();
 
-    const handleSubmit = (e) => {
+    useEffect(() => {
+        // Redirect if already logged in
+        const checkSession = async () => {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session) navigate('/dashboard');
+        };
+        checkSession();
+    }, [navigate]);
+
+    const handleSubmit = async (e) => {
         e.preventDefault();
-        // Redirect to dashboard on successful auth
-        navigate('/dashboard');
+        setError(null);
+        setLoading(true);
+
+        try {
+            if (isLogin) {
+                const { error } = await supabase.auth.signInWithPassword({
+                    email,
+                    password
+                });
+                if (error) throw error;
+                navigate('/dashboard');
+            } else {
+                const [firstName, ...lastNames] = name.trim().split(' ');
+                const lastName = lastNames.join(' ');
+                
+                const { data, error } = await supabase.auth.signUp({
+                    email,
+                    password,
+                    options: {
+                        data: {
+                            first_name: firstName,
+                            last_name: lastName || ''
+                        }
+                    }
+                });
+                
+                if (error) throw error;
+                
+                // Attempt to create public.users profile (fails silently if no RLS insert policy)
+                if (data?.user) {
+                    await supabase.from('users').insert([{
+                        id: data.user.id,
+                        email: data.user.email,
+                        first_name: firstName,
+                        last_name: lastName || '',
+                        password_hash: 'supabase_auth' // satisfying NOT NULL constraint
+                    }]);
+                }
+                
+                if (data?.session) {
+                    navigate('/dashboard');
+                } else {
+                    setError('Account created! Please check your email to verify if required.');
+                }
+            }
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
@@ -27,7 +91,7 @@ export default function Auth() {
                     {/* Brand Layer */}
                     <div className="absolute inset-0 flex flex-col justify-between p-16">
                         <div className="flex items-center gap-3">
-                            <img src="/logo.png" alt="SafarAI Logo" className="w-10 h-10 object-contain drop-shadow-lg" />
+                            <img src="/logonav.png" alt="SafarAI Logo" className="w-10 h-10 object-contain drop-shadow-lg" />
                             <span className="text-3xl font-extrabold text-white tracking-tight font-headline">SafarAI</span>
                         </div>
                         
@@ -64,7 +128,7 @@ export default function Auth() {
                     {/* Header & Intro */}
                     <div className="space-y-3">
                         <div className="lg:hidden mb-8 flex items-center gap-3">
-                            <img src="/logo.png" alt="SafarAI Logo" className="w-10 h-10 object-contain" />
+                            <img src="/logonav.png" alt="SafarAI Logo" className="w-10 h-10 object-contain" />
                             <span className="text-2xl font-extrabold text-teal-800 tracking-tight font-headline">SafarAI</span>
                         </div>
                         <h1 className="text-4xl font-bold text-on-surface tracking-tight font-headline">
@@ -101,6 +165,11 @@ export default function Auth() {
 
                     {/* Auth Form */}
                     <form className="space-y-6" onSubmit={handleSubmit}>
+                        {error && (
+                            <div className="p-4 text-sm text-red-500 bg-red-500/10 border border-red-500/20 rounded-xl">
+                                {error}
+                            </div>
+                        )}
                         <div className="space-y-4">
                             {!isLogin && (
                                 <div className="space-y-2">
@@ -111,6 +180,9 @@ export default function Auth() {
                                         placeholder="John Doe" 
                                         type="text" 
                                         required
+                                        value={name}
+                                        onChange={(e) => setName(e.target.value)}
+                                        disabled={loading}
                                     />
                                 </div>
                             )}
@@ -123,6 +195,9 @@ export default function Auth() {
                                     placeholder="name@example.com" 
                                     type="email" 
                                     required
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    disabled={loading}
                                 />
                             </div>
                             
@@ -138,6 +213,9 @@ export default function Auth() {
                                         placeholder="••••••••" 
                                         type="password" 
                                         required
+                                        value={password}
+                                        onChange={(e) => setPassword(e.target.value)}
+                                        disabled={loading}
                                     />
                                     <button className="absolute right-4 top-1/2 -translate-y-1/2 text-stone-400 hover:text-primary transition-colors" type="button">
                                         <span className="material-symbols-outlined text-xl">visibility</span>
@@ -147,11 +225,12 @@ export default function Auth() {
                         </div>
                         
                         <button 
-                            className="w-full py-4 mt-2 bg-gradient-to-r from-teal-700 to-teal-600 text-white font-bold rounded-full shadow-lg shadow-teal-900/20 hover:opacity-90 active:scale-[0.98] transition-all duration-200 flex items-center justify-center gap-2" 
+                            className="w-full py-4 mt-2 bg-gradient-to-r from-teal-700 to-teal-600 text-white font-bold rounded-full shadow-lg shadow-teal-900/20 hover:opacity-90 active:scale-[0.98] transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed" 
                             type="submit"
+                            disabled={loading}
                         >
-                            {isLogin ? "Log In" : "Create Account"}
-                            <span className="material-symbols-outlined text-xl">arrow_right_alt</span>
+                            {loading ? "Please wait..." : (isLogin ? "Log In" : "Create Account")}
+                            {!loading && <span className="material-symbols-outlined text-xl">arrow_right_alt</span>}
                         </button>
                     </form>
 

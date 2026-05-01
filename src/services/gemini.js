@@ -561,7 +561,7 @@ const executeTools = async (intentResult) => {
 // Second LLM call with the full persona. Receives tool data as context.
 // NO tools attached — the model focuses purely on generating the JSON response.
 
-const generateFinalResponse = async (userInput, intentResult, toolData, context, langInfo, isAuthenticated = true) => {
+const generateFinalResponse = async (userInput, intentResult, toolData, context, langInfo, isAuthenticated = true, chatHistory = []) => {
   console.log('[Waterfall] Stage 3: Generating final response... (auth:', isAuthenticated, ')');
 
   const systemPrompt = `ROLE: You are SafarAI, the digital concierge and expert travel companion for Moroccan travelers.
@@ -595,6 +595,11 @@ RULES:
 ${!isAuthenticated ? `
 - GUEST USER: Limit text to 2-3 sentences. Limit monuments to 1. Leave itinerary empty. Append "\\n\\n🔐 **Sign up for free** to unlock full itineraries!" to the text.` : ''}`;
 
+  const mappedHistory = chatHistory.slice(-10).map(msg => ({
+    role: msg.role === 'user' ? 'user' : 'assistant',
+    content: msg.text || ''
+  }));
+
   const payload = {
     model: MODEL_NAME,
     messages: [
@@ -602,6 +607,7 @@ ${!isAuthenticated ? `
         role: 'system',
         content: `${systemPrompt}\n\nUser Context:\n- Preferences: ${JSON.stringify(context.preferences)}\n\nTask: The user can insert a question or statement in ANY format. You must ALWAYS respond properly and naturally based on the input. ONLY fill out the 'weather', 'monuments', and 'itinerary' JSON fields if the user explicitly asks for a destination, recommendation, or city details. For any other input (e.g., greetings, general questions, weird formatting), leave those arrays/objects empty and reply naturally using ONLY the 'text' field.`
       },
+      ...mappedHistory,
       {
         role: 'user',
         content: userInput
@@ -620,7 +626,7 @@ ${!isAuthenticated ? `
 
 // ─── 7. Orchestrator (Main Export) — Waterfall Pipeline ─────────────────────
 
-export const getGeminiResponse = async (userInput, { isAuthenticated = true } = {}) => {
+export const getGeminiResponse = async (userInput, { isAuthenticated = true, chatHistory = [] } = {}) => {
   // ── Sanitize & Validate ──
   const sanitized = sanitizeInput(userInput);
   if (!validateInput(sanitized)) throw new Error('User input cannot be empty');
@@ -639,7 +645,7 @@ export const getGeminiResponse = async (userInput, { isAuthenticated = true } = 
     const toolData = await executeTools(intentResult);
 
     // ── Stage 3: Generate Final Response (LLM, no tools) ──
-    const rawResponse = await generateFinalResponse(langInfo.originalInput, intentResult, toolData, context, langInfo, isAuthenticated);
+    const rawResponse = await generateFinalResponse(langInfo.originalInput, intentResult, toolData, context, langInfo, isAuthenticated, chatHistory);
 
     // ── Parse & Return ──
     const parsed = parseResponse(rawResponse);

@@ -11,8 +11,8 @@ const Footer = () => {
                 <div className="flex flex-wrap justify-center gap-4 sm:gap-6 md:gap-8">
                     <a className="text-stone-500 hover:text-teal-700 hover:underline transition-all font-headline text-xs sm:text-sm tracking-wide" href="#">Journal</a>
                     <a className="text-stone-500 hover:text-teal-700 hover:underline transition-all font-headline text-xs sm:text-sm tracking-wide" href="#">Contact</a>
-                    <a className="text-stone-500 hover:text-teal-700 hover:underline transition-all font-headline text-xs sm:text-sm tracking-wide" href="#">Privacy Policy</a>
-                    <a className="text-stone-500 hover:text-teal-700 hover:underline transition-all font-headline text-xs sm:text-sm tracking-wide" href="#">Terms of Service</a>
+                    <a className="text-stone-500 hover:text-teal-700 hover:underline transition-all font-headline text-xs sm:text-sm tracking-wide" href="/privacy">Privacy Policy</a>
+                    <a className="text-stone-500 hover:text-teal-700 hover:underline transition-all font-headline text-xs sm:text-sm tracking-wide" href="/terms">Terms of Service</a>
                 </div>
                 
                 <div className="text-stone-500 font-headline text-xs sm:text-sm tracking-wide text-center md:text-right">

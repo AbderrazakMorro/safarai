@@ -9,7 +9,7 @@ const MobileHeader = () => {
                     <span className="material-symbols-outlined">menu</span>
                 </button>
                 <Link to="/dashboard" className="flex items-center gap-2">
-                    <img src="/logo.png" alt="SafarAI Logo" className="w-14 h-14 object-contain" />
+                    <img src="/logonav.png" alt="SafarAI Logo" className="w-14 h-14 object-contain" />
                     <span className="text-xl font-bold text-teal-800 dark:text-teal-200 font-headline tracking-tight">SafarAI</span>
                 </Link>
             </div>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { supabase } from '../lib/supabase';
 
 export default function Dashboard() {
   const [places, setPlaces] = useState([]);
@@ -6,10 +7,30 @@ export default function Dashboard() {
   const [weather, setWeather] = useState(null);
   const [activeDashboardCategory, setActiveDashboardCategory] = useState('All');
   const [dashboardActivities, setDashboardActivities] = useState([]);
+  const [user, setUser] = useState(null);
+
+  // Onboarding hints
+  const [hintStep, setHintStep] = useState(0);
+  const [showHints, setShowHints] = useState(false);
+
+  const HINTS = [
+    { icon: 'waving_hand', title: 'Welcome to SafarAI!', text: 'This is your personal travel dashboard. Let us show you around in a few quick steps.', color: 'from-teal-600 to-emerald-500' },
+    { icon: 'auto_awesome', title: 'Plan a Trip', text: 'Click "Plan Trip" to let our AI build a custom itinerary for any Moroccan destination in seconds.', color: 'from-teal-700 to-teal-500' },
+    { icon: 'chat', title: 'AI Concierge', text: 'Use the chat bubble in the bottom-right corner to ask SafarAI anything — restaurants, weather, hidden gems, and more.', color: 'from-amber-500 to-orange-500' },
+    { icon: 'person', title: 'Your Profile', text: 'Click your avatar in the top-right to update your profile picture and personal info. Enjoy your journey!', color: 'from-indigo-500 to-purple-500' },
+  ];
 
   useEffect(() => {
-    const fetchPlaces = async () => {
+    const fetchUserAndPlaces = async () => {
       try {
+        const { data: { user } } = await supabase.auth.getUser();
+        setUser(user);
+
+        // Show onboarding hints on first login
+        if (user && !localStorage.getItem('safarai-onboarding-done')) {
+          setShowHints(true);
+        }
+
         const otmKey = import.meta.env.VITE_OPENTRIPMAP_API_KEY;
         const orKey = import.meta.env.VITE_OPENROUTER_API_KEY;
 
@@ -118,7 +139,7 @@ Format:
       }
     };
 
-    fetchPlaces();
+    fetchUserAndPlaces();
   }, []);
 
   const getVCIcon = (iconString) => {
@@ -135,14 +156,80 @@ Format:
   };
   const weatherInfo = weather ? getVCIcon(weather.icon) : { icon: 'partly_cloudy_day', desc: 'Scattered clouds' };
 
+  const firstName = user?.user_metadata?.first_name || 'Traveler';
+  const memberSince = user ? new Date(user.created_at).getFullYear() : '2026';
+
+  const dismissHints = () => {
+    setShowHints(false);
+    localStorage.setItem('safarai-onboarding-done', 'true');
+  };
+
+  const nextHint = () => {
+    if (hintStep < HINTS.length - 1) setHintStep(hintStep + 1);
+    else dismissHints();
+  };
+
+  const prevHint = () => {
+    if (hintStep > 0) setHintStep(hintStep - 1);
+  };
+
   return (
-    <div className="max-w-7xl mx-auto px-4 md:px-8 py-6 md:py-12">
+    <div className="max-w-7xl mx-auto px-4 md:px-8 py-6 md:py-12 relative">
+
+        {/* Onboarding Hints Overlay */}
+        {showHints && (
+          <div className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4" onClick={dismissHints}>
+            <div
+              className="relative w-full max-w-md animate-in fade-in"
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Card */}
+              <div className={`bg-gradient-to-br ${HINTS[hintStep].color} rounded-2xl p-8 text-white shadow-2xl`}>
+                <span className="material-symbols-outlined text-5xl mb-4 opacity-80">{HINTS[hintStep].icon}</span>
+                <h3 className="text-2xl font-extrabold font-headline tracking-tight mb-2">{HINTS[hintStep].title}</h3>
+                <p className="text-white/85 leading-relaxed">{HINTS[hintStep].text}</p>
+
+                {/* Step indicators */}
+                <div className="flex items-center gap-1.5 mt-6">
+                  {HINTS.map((_, i) => (
+                    <div key={i} className={`h-1.5 rounded-full transition-all ${i === hintStep ? 'w-6 bg-white' : 'w-1.5 bg-white/40'}`} />
+                  ))}
+                </div>
+
+                {/* Navigation */}
+                <div className="flex items-center justify-between mt-6">
+                  <button
+                    onClick={dismissHints}
+                    className="text-white/60 text-sm font-medium hover:text-white transition-colors"
+                  >
+                    Skip tour
+                  </button>
+                  <div className="flex gap-2">
+                    {hintStep > 0 && (
+                      <button onClick={prevHint} className="px-4 py-2 rounded-full bg-white/20 text-sm font-bold hover:bg-white/30 transition-colors">
+                        Back
+                      </button>
+                    )}
+                    <button onClick={nextHint} className="px-5 py-2 rounded-full bg-white text-teal-800 text-sm font-bold hover:bg-white/90 active:scale-95 transition-all">
+                      {hintStep < HINTS.length - 1 ? 'Next' : 'Get Started!'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Step counter */}
+              <p className="text-center text-white/50 text-xs font-bold mt-4 tracking-widest uppercase">
+                Step {hintStep + 1} of {HINTS.length}
+              </p>
+            </div>
+          </div>
+        )}
         {/* Hero Greeting Section */}
         <section className="mb-12">
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
                 <div>
-                    <span className="inline-block px-4 py-1.5 bg-tertiary-container/20 text-tertiary font-bold text-[10px] tracking-widest uppercase rounded-full mb-4">MEMBER SINCE 2022</span>
-                    <h2 className="text-5xl font-extrabold tracking-tighter text-on-surface mb-2 font-headline">Welcome back, Alex!</h2>
+                    <span className="inline-block px-4 py-1.5 bg-tertiary-container/20 text-tertiary font-bold text-[10px] tracking-widest uppercase rounded-full mb-4">MEMBER SINCE {memberSince}</span>
+                    <h2 className="text-5xl font-extrabold tracking-tighter text-on-surface mb-2 font-headline">Welcome back, {firstName}!</h2>
                     <p className="text-on-surface-variant text-lg max-w-xl leading-relaxed">Your next adventure is waiting. AI has curated some breathtaking vistas for your upcoming September break.</p>
                 </div>
                 
